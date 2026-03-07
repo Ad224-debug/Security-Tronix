@@ -1,0 +1,36 @@
+node_modules/
+.env
+config.json
+warnings.json
+warn-config.json
+data/
+*.log
+.DS_Store
+.vscode/
+.kiro/
+
+# Windows
+Thumbs.db
+desktop.ini
+
+# OneDrive
+~$*
+*.tmp
+
+# Archivos temporales de Windows
+AppData/
+Archivos temporales de Internet/
+Configuracion local/
+Cookies/
+Datos de programa/
+Entorno de red/
+Impresoras/
+Menu Inicio/
+Mis documentos/
+Plantillas/
+Recent/
+SendTo/
+
+# Ignorar archivos de sistema de OneDrive
+*.lnk
+*.url
