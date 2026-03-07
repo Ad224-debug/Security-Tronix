@@ -985,17 +985,4 @@ client.on('messageCreate', async (message) => {
   }
 });
 
-// Debug: Check token before login
-const token = process.env.DISCORD_TOKEN;
-console.log('Token exists:', !!token);
-console.log('Token type:', typeof token);
-console.log('Token length:', token ? token.length : 0);
-console.log('Token first 10 chars:', token ? token.substring(0, 10) : 'undefined');
-
-if (!token) {
-  console.error('❌ DISCORD_TOKEN is not defined in environment variables!');
-  console.error('Available env vars:', Object.keys(process.env).filter(k => k.includes('DISCORD') || k.includes('APPLICATION')));
-  process.exit(1);
-}
-
-client.login(token.trim());
+client.login(process.env.DISCORD_TOKEN);
