@@ -291,6 +291,32 @@ client.on('messageCreate', async (message) => {
   if (message.author?.bot) return;
   if (message.type !== 0 && message.type !== 19) return; // Solo mensajes normales y replies
 
+  // Sistema AFK - detectar si el usuario que escribe está AFK
+  if (global.afkUsers && global.afkUsers.has(message.author.id)) {
+    const afkData = global.afkUsers.get(message.author.id);
+    if (afkData.guildId === message.guild.id) {
+      global.afkUsers.delete(message.author.id);
+      try {
+        const member = message.guild.members.cache.get(message.author.id);
+        if (member?.nickname?.startsWith('[AFK] ')) {
+          await member.setNickname(member.nickname.replace('[AFK] ', '')).catch(() => {});
+        }
+      } catch {}
+      await message.reply({ embeds: [new EmbedBuilder().setTitle('👋 Bienvenido de vuelta').setDescription(`${message.author} ya no está AFK`).setColor(0x57F287).setTimestamp()], allowedMentions: { repliedUser: false } }).catch(() => {});
+    }
+  }
+
+  // Sistema AFK - notificar si mencionan a alguien AFK
+  if (global.afkUsers && message.mentions.users.size > 0) {
+    for (const [, user] of message.mentions.users) {
+      if (global.afkUsers.has(user.id)) {
+        const afkData = global.afkUsers.get(user.id);
+        const timeAFK = Math.round((Date.now() - afkData.timestamp) / 60000);
+        await message.reply({ embeds: [new EmbedBuilder().setTitle('💤 Usuario AFK').setDescription(`**${user.username}** está ausente`).addFields({ name: '⏰ Tiempo AFK', value: `${timeAFK} min`, inline: true }, { name: '📝 Razón', value: afkData.reason, inline: false }).setColor(0xFEE75C).setTimestamp()], allowedMentions: { repliedUser: false } }).catch(() => {});
+      }
+    }
+  }
+
   // Capturar mensajes para logs activos
   if (global.activeLogs) {
     const key = `${message.guild.id}-${message.author.id}`;
@@ -921,6 +947,17 @@ client.on('interactionCreate', async (interaction) => {
       if (automodCmd?.handleInteraction) await automodCmd.handleInteraction(interaction);
     } catch (e) {
       console.error('Error en automod interaction:', e);
+    }
+    return;
+  }
+
+  // Manejar botones de /fun (hug, kiss, slap)
+  if (interaction.isButton() && interaction.customId?.startsWith('fun_')) {
+    try {
+      const funCmd = client.commands.get('fun');
+      if (funCmd?.handleButton) await funCmd.handleButton(interaction);
+    } catch (e) {
+      console.error('Error en fun button:', e);
     }
     return;
   }
