@@ -288,6 +288,19 @@ const { checkAutomod } = require('./automod-system');
 // Cachear mensajes para poder recuperarlos cuando se eliminen
 client.on('messageCreate', async (message) => {
   if (!message.guild) return;
+
+  // Capturar mensajes para logs activos
+  if (global.activeLogs) {
+    const key = `${message.guild.id}-${message.author.id}`;
+    if (global.activeLogs.has(key)) {
+      global.activeLogs.get(key).messages.push({
+        content: message.content || '[sin texto]',
+        channel: message.channel.name,
+        timestamp: message.createdTimestamp,
+        attachments: message.attachments.size
+      });
+    }
+  }
   
   // Ejecutar auto-moderación
   await checkAutomod(message);
