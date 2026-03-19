@@ -41,7 +41,11 @@ module.exports = {
       .addStringOption(o => o.setName('command').setDescription('Nombre del comando').setRequired(true))
       .addStringOption(o => o.setName('action').setDescription('Acción').setRequired(true).addChoices({ name: 'Agregar usuario', value: 'add_user' }, { name: 'Agregar rol', value: 'add_role' }, { name: 'Remover usuario', value: 'remove_user' }, { name: 'Remover rol', value: 'remove_role' }, { name: 'Limpiar', value: 'clear' }, { name: 'Ver', value: 'view' }))
       .addUserOption(o => o.setName('user').setDescription('Usuario'))
-      .addRoleOption(o => o.setName('role').setDescription('Rol'))),
+      .addRoleOption(o => o.setName('role').setDescription('Rol')))
+    // joincheck
+    .addSubcommand(s => s.setName('joincheck').setDescription('Canal para avisos de reputación al unirse')
+      .addChannelOption(o => o.setName('channel').setDescription('Canal donde se enviarán los análisis').addChannelTypes(ChannelType.GuildText))
+      .addBooleanOption(o => o.setName('disable').setDescription('Desactivar el sistema'))),
 
   async execute(interaction) {
     const sub = interaction.options.getSubcommand();
@@ -172,6 +176,22 @@ module.exports = {
         const roles = cp.roles.length > 0 ? cp.roles.map(id => `<@&${id}>`).join(', ') : 'Ninguno';
         return interaction.reply({ embeds: [new EmbedBuilder().setTitle(`Permisos: /${commandName}`).addFields({ name: 'Usuarios', value: users }, { name: 'Roles', value: roles }).setColor(0x5865F2).setTimestamp()], ephemeral: true });
       }
+    }
+
+    // ── JOINCHECK ────────────────────────────────────────────────────────────
+    if (sub === 'joincheck') {
+      const channel = interaction.options.getChannel('channel');
+      const disable = interaction.options.getBoolean('disable');
+      if (!config.joinCheckChannels) config.joinCheckChannels = {};
+      if (disable) {
+        delete config.joinCheckChannels[interaction.guild.id];
+        save();
+        return interaction.reply({ content: '✅ Sistema de reputación al unirse **desactivado**.', ephemeral: true });
+      }
+      if (!channel) return interaction.reply({ content: '❌ Debes indicar un canal o usar `disable: true`.', ephemeral: true });
+      config.joinCheckChannels[interaction.guild.id] = channel.id;
+      save();
+      return interaction.reply({ embeds: [new EmbedBuilder().setTitle('✅ Join Reputation Check').setDescription(`Cuando alguien se una (o apruebe el formulario de acceso), se enviará un análisis de reputación en ${channel}.`).addFields({ name: '📋 Incluye', value: '• Edad de la cuenta\n• Avatar\n• Nombre sospechoso\n• Historial de warns/kicks/bans en este servidor\n• Nivel de riesgo (🟢 Bajo / 🟡 Medio / 🔴 Alto)' }).setColor(0x5865F2).setTimestamp()], ephemeral: true });
     }
   }
 };

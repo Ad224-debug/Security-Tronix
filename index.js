@@ -499,6 +499,85 @@ client.on('messageUpdate', async (oldMessage, newMessage) => {
   await sendLog(newMessage.guild, embed);
 });
 
+// ==================== ANÁLISIS DE REPUTACIÓN AL UNIRSE ====================
+async function analyzeAndSendReputation(member) {
+  const configPath = path.join(__dirname, 'config.json');
+  if (!fs.existsSync(configPath)) return;
+  const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+
+  // Canal de join-check o fallback al canal de logs
+  const channelId = config.joinCheckChannels?.[member.guild.id] || config.logChannels?.[member.guild.id];
+  if (!channelId) return;
+
+  const channel = await member.guild.channels.fetch(channelId).catch(() => null);
+  if (!channel) return;
+
+  const user = member.user;
+  const warningsPath = path.join(__dirname, 'warnings.json');
+  const casesPath = path.join(__dirname, 'data/mod-cases.json');
+  const warnings = fs.existsSync(warningsPath) ? JSON.parse(fs.readFileSync(warningsPath, 'utf8')) : {};
+  const cases = fs.existsSync(casesPath) ? JSON.parse(fs.readFileSync(casesPath, 'utf8')) : {};
+
+  const userWarnings = warnings[`${member.guild.id}-${user.id}`] || [];
+  const guildCases = (cases[member.guild.id] || []).filter(c => c.targetId === user.id);
+  const bans = guildCases.filter(c => c.type === 'ban' || c.type === 'tempban').length;
+  const kicks = guildCases.filter(c => c.type === 'kick').length;
+  const timeouts = guildCases.filter(c => c.type === 'timeout').length;
+
+  const accountAgeDays = Math.floor((Date.now() - user.createdTimestamp) / 86400000);
+  const accountAgeYears = Math.floor(accountAgeDays / 365);
+  const ageStr = accountAgeYears > 0
+    ? `${accountAgeYears} año(s), ${accountAgeDays % 365} día(s)`
+    : `${accountAgeDays} día(s)`;
+
+  // Calcular puntuación de riesgo
+  let riskScore = 0;
+  const flags = [];
+
+  if (accountAgeDays < 3)  { riskScore += 40; flags.push('🚨 Cuenta muy nueva (<3 días)'); }
+  else if (accountAgeDays < 7)  { riskScore += 25; flags.push('⚠️ Cuenta nueva (<7 días)'); }
+  else if (accountAgeDays < 30) { riskScore += 10; flags.push('⚠️ Cuenta reciente (<30 días)'); }
+
+  if (!user.avatar) { riskScore += 10; flags.push('⚠️ Sin avatar'); }
+  if (/free.*nitro|nitro.*free|discord.*gift/i.test(user.username)) { riskScore += 35; flags.push('🚨 Nombre sospechoso (Nitro/Gift)'); }
+  if (/admin|moderator|staff|official/i.test(user.username)) { riskScore += 20; flags.push('⚠️ Nombre que imita staff'); }
+
+  riskScore += userWarnings.length * 5 + kicks * 15 + bans * 30 + timeouts * 10;
+  if (userWarnings.length > 0) flags.push(`📋 ${userWarnings.length} advertencia(s) en este servidor`);
+  if (kicks > 0) flags.push(`👢 ${kicks} kick(s) en este servidor`);
+  if (bans > 0) flags.push(`🔨 ${bans} ban(s) en este servidor`);
+
+  const riskLevel = riskScore >= 60 ? '🔴 ALTO' : riskScore >= 30 ? '🟡 MEDIO' : '🟢 BAJO';
+  const color = riskScore >= 60 ? 0xED4245 : riskScore >= 30 ? 0xFFA500 : 0x57F287;
+
+  const isPending = member.pending;
+  const joinType = isPending ? '📋 Aprobó formulario de acceso' : '📥 Se unió al servidor';
+
+  const embed = new EmbedBuilder()
+    .setTitle(`🔍 Análisis de Reputación — ${joinType}`)
+    .setColor(color)
+    .setThumbnail(user.displayAvatarURL())
+    .addFields(
+      { name: '👤 Usuario', value: `${user} (${user.tag})`, inline: true },
+      { name: '🆔 ID', value: user.id, inline: true },
+      { name: '⚠️ Nivel de riesgo', value: `${riskLevel} (${riskScore} pts)`, inline: true },
+      { name: '📅 Cuenta creada', value: `<t:${Math.floor(user.createdTimestamp / 1000)}:D>`, inline: true },
+      { name: '⏳ Antigüedad', value: ageStr, inline: true },
+      { name: '🖼️ Avatar', value: user.avatar ? '✅ Tiene avatar' : '❌ Sin avatar', inline: true },
+      { name: '📊 Historial (este servidor)', value: `⚠️ Warns: **${userWarnings.length}** | 👢 Kicks: **${kicks}** | 🔨 Bans: **${bans}** | ⏱️ Timeouts: **${timeouts}**` }
+    )
+    .setFooter({ text: 'Tronix Security • Join Reputation Check' })
+    .setTimestamp();
+
+  if (flags.length > 0) {
+    embed.addFields({ name: '🚩 Alertas detectadas', value: flags.join('\n') });
+  } else {
+    embed.addFields({ name: '✅ Sin alertas', value: 'No se detectaron señales de riesgo.' });
+  }
+
+  await channel.send({ embeds: [embed] });
+}
+
 // Log: Miembro se une + Sistema de protección de bots
 client.on('guildMemberAdd', async (member) => {
   // Sistema de protección de bots
@@ -594,6 +673,12 @@ client.on('guildMemberAdd', async (member) => {
     .setTimestamp();
 
   await sendLog(member.guild, embed);
+
+  // Análisis de reputación: solo si NO tiene formulario pendiente
+  // (si tiene pending:true, se analizará cuando apruebe el formulario en guildMemberUpdate)
+  if (!member.pending) {
+    await analyzeAndSendReputation(member).catch(err => console.error('[joincheck]', err));
+  }
 });
 
 // Log: Miembro se va
@@ -646,6 +731,11 @@ client.on('guildBanRemove', async (ban) => {
 
 // Log: Rol asignado/removido
 client.on('guildMemberUpdate', async (oldMember, newMember) => {
+  // Membership Screening: usuario aprobó el formulario (pending: true → false)
+  if (oldMember.pending === true && newMember.pending === false) {
+    await analyzeAndSendReputation(newMember).catch(err => console.error('[joincheck screening]', err));
+  }
+
   const addedRoles = newMember.roles.cache.filter(role => !oldMember.roles.cache.has(role.id));
   const removedRoles = oldMember.roles.cache.filter(role => !newMember.roles.cache.has(role.id));
 
