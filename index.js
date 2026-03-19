@@ -927,6 +927,7 @@ client.on('interactionCreate', async (interaction) => {
 
   if (!interaction.isChatInputCommand()) return;
 
+  const command = client.commands.get(interaction.commandName);
   if (!command) return;
 
   // Verificar permisos personalizados del comando
