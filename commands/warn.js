@@ -1,149 +1,83 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { createCase } = require('./case.js');
 const fs = require('fs');
 const path = require('path');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('warn')
-    .setDescription('Warns a user')
+    .setDescription('Advierte a un usuario')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
-    .addUserOption(option =>
-      option.setName('user')
-        .setDescription('User to warn')
-        .setRequired(true))
-    .addStringOption(option =>
-      option.setName('reason')
-        .setDescription('Reason for the warning')
-        .setRequired(true)),
+    .addUserOption(opt => opt.setName('user').setDescription('Usuario a advertir').setRequired(true))
+    .addStringOption(opt => opt.setName('reason').setDescription('Razón de la advertencia').setRequired(true)),
+
   async execute(interaction) {
-    const getText = (key) => interaction.client.getText(interaction.guild.id, key);
-
-    if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
-      return await interaction.reply({
-        content: getText('admin_only'),
-        ephemeral: true
-      });
-    }
-
+    const lang = interaction.client.getLanguage(interaction.guild.id);
     const usuario = interaction.options.getUser('user');
     const razon = interaction.options.getString('reason');
 
-    // Cargar configuración de warnings
-    const warnConfigPath = path.join(__dirname, '../warn-config.json');
-    let warnConfig = {};
-    
-    if (fs.existsSync(warnConfigPath)) {
-      warnConfig = JSON.parse(fs.readFileSync(warnConfigPath, 'utf8'));
-    }
+    const miembro = await interaction.guild.members.fetch(usuario.id).catch(() => null);
 
-    const guildConfig = warnConfig[interaction.guild.id] || {
-      dmNotifications: true,
-      autoAction: 'none',
-      autoActionThreshold: 3,
-    };
+    if (usuario.id === interaction.user.id)
+      return interaction.reply({ content: '❌ No puedes advertirte a ti mismo.', ephemeral: true });
+    if (usuario.id === interaction.guild.ownerId)
+      return interaction.reply({ content: '❌ No puedes advertir al dueño del servidor.', ephemeral: true });
+    if (miembro && miembro.roles.highest.position >= interaction.member.roles.highest.position)
+      return interaction.reply({ content: '❌ No puedes advertir a alguien con un rol igual o superior al tuyo.', ephemeral: true });
 
-    // Cargar o crear archivo de advertencias
+    // Guardar warning
     const warningsPath = path.join(__dirname, '../warnings.json');
-    let warnings = {};
-    
-    if (fs.existsSync(warningsPath)) {
-      warnings = JSON.parse(fs.readFileSync(warningsPath, 'utf8'));
-    }
-
+    let warnings = fs.existsSync(warningsPath) ? JSON.parse(fs.readFileSync(warningsPath, 'utf8')) : {};
     const key = `${interaction.guild.id}-${usuario.id}`;
-    if (!warnings[key]) {
-      warnings[key] = [];
-    }
-
-    warnings[key].push({
-      reason: razon,
-      moderator: interaction.user.id,
-      timestamp: Date.now(),
-    });
-
-    fs.writeFileSync(warningsPath, JSON.stringify(warnings, null, 2), 'utf8');
-
+    if (!warnings[key]) warnings[key] = [];
+    warnings[key].push({ reason: razon, moderator: interaction.user.id, timestamp: Date.now() });
+    fs.writeFileSync(warningsPath, JSON.stringify(warnings, null, 2));
     const warnCount = warnings[key].length;
 
-    await interaction.reply({
-      embeds: [{
-        title: getText('warn_user'),
-        description: `${usuario} ${getText('warn_user_desc')}`,
-        fields: [
-          { name: getText('afk_reason'), value: razon },
-          { name: getText('moderator'), value: `${interaction.user}` },
-          { name: getText('total_warnings'), value: `${warnCount}` },
-        ],
-        color: 0xFEE75C,
-        timestamp: new Date(),
-      }]
-    });
+    // Crear caso
+    const caseId = createCase(interaction.guild.id, 'warn', usuario.id, interaction.user.id, razon);
 
-    // Enviar DM al usuario si está habilitado
-    if (guildConfig.dmNotifications) {
+    // DM al usuario
+    try {
+      await usuario.send({ embeds: [
+        new EmbedBuilder()
+          .setTitle('⚠️ Has recibido una advertencia')
+          .setDescription(`Has recibido una advertencia en **${interaction.guild.name}**`)
+          .addFields(
+            { name: '📝 Razón', value: razon },
+            { name: '⚠️ Total advertencias', value: `${warnCount}` }
+          )
+          .setColor(0xFEE75C).setTimestamp()
+      ]});
+    } catch { /* DMs cerrados */ }
+
+    const embed = new EmbedBuilder()
+      .setTitle('⚠️ Usuario Advertido')
+      .setThumbnail(usuario.displayAvatarURL())
+      .addFields(
+        { name: '👤 Usuario', value: `${usuario} (${usuario.id})`, inline: true },
+        { name: '👮 Moderador', value: `${interaction.user}`, inline: true },
+        { name: '📝 Razón', value: razon, inline: false },
+        { name: '⚠️ Total advertencias', value: `${warnCount}`, inline: true },
+        { name: '📋 Caso', value: `#${caseId}`, inline: true }
+      )
+      .setColor(0xFEE75C).setTimestamp();
+
+    await interaction.reply({ embeds: [embed] });
+
+    // Acción automática por umbral
+    const warnConfigPath = path.join(__dirname, '../warn-config.json');
+    const warnConfig = fs.existsSync(warnConfigPath) ? JSON.parse(fs.readFileSync(warnConfigPath, 'utf8')) : {};
+    const guildConfig = warnConfig[interaction.guild.id] || { autoAction: 'none', autoActionThreshold: 3 };
+
+    if (guildConfig.autoAction !== 'none' && warnCount >= guildConfig.autoActionThreshold && miembro) {
+      const autoReason = `Acción automática: ${warnCount} advertencias`;
       try {
-        const lang = interaction.client.getLanguage(interaction.guild.id);
-        const dmTitle = lang === 'es' ? '⚠️ Has recibido una advertencia' : '⚠️ You received a warning';
-        const dmDesc = lang === 'es' 
-          ? `Has recibido una advertencia en **${interaction.guild.name}**`
-          : `You received a warning in **${interaction.guild.name}**`;
-
-        await usuario.send({
-          embeds: [{
-            title: dmTitle,
-            description: dmDesc,
-            fields: [
-              { name: getText('afk_reason'), value: razon },
-              { name: getText('total_warnings'), value: `${warnCount}` },
-            ],
-            color: 0xFEE75C,
-            timestamp: new Date(),
-          }]
-        });
-      } catch (error) {
-        // Usuario tiene DMs desactivados
-      }
+        if (guildConfig.autoAction === 'kick') await miembro.kick(autoReason);
+        else if (guildConfig.autoAction === 'ban') await interaction.guild.members.ban(usuario, { reason: autoReason });
+        else if (guildConfig.autoAction === 'timeout') await miembro.timeout(60 * 60 * 1000, autoReason); // 1h
+        await interaction.followUp({ content: `⚡ Acción automática ejecutada: **${guildConfig.autoAction}** por alcanzar ${warnCount} advertencias.`, ephemeral: true });
+      } catch (e) { console.error('Error en acción automática:', e); }
     }
-
-    // Acción automática si se alcanza el umbral
-    if (guildConfig.autoAction !== 'none' && warnCount >= guildConfig.autoActionThreshold) {
-      const miembro = interaction.guild.members.cache.get(usuario.id);
-      
-      if (miembro) {
-        try {
-          const lang = interaction.client.getLanguage(interaction.guild.id);
-          const autoReason = lang === 'es' 
-            ? `Acción automática: ${warnCount} advertencias`
-            : `Auto action: ${warnCount} warnings`;
-
-          if (guildConfig.autoAction === 'kick') {
-            await miembro.kick(autoReason);
-            await interaction.followUp({
-              content: `⚡ ${usuario} ${lang === 'es' ? 'fue expulsado automáticamente por alcanzar' : 'was automatically kicked for reaching'} ${warnCount} ${getText('warnings').toLowerCase()}.`,
-              ephemeral: true
-            });
-          } else if (guildConfig.autoAction === 'ban') {
-            await interaction.guild.members.ban(usuario, { reason: autoReason });
-            await interaction.followUp({
-              content: `⚡ ${usuario} ${lang === 'es' ? 'fue baneado automáticamente por alcanzar' : 'was automatically banned for reaching'} ${warnCount} ${getText('warnings').toLowerCase()}.`,
-              ephemeral: true
-            });
-          } else if (guildConfig.autoAction === 'mute') {
-            const mutedRoleId = '1478237207885119672';
-            const mutedRole = interaction.guild.roles.cache.get(mutedRoleId);
-            
-            if (mutedRole) {
-              await miembro.roles.add(mutedRole);
-              await interaction.followUp({
-                content: `⚡ ${usuario} ${lang === 'es' ? 'fue muteado automáticamente por alcanzar' : 'was automatically muted for reaching'} ${warnCount} ${getText('warnings').toLowerCase()}.`,
-                ephemeral: true
-              });
-            }
-          }
-        } catch (error) {
-          console.error('Error en acción automática:', error);
-        }
-      }
-    }
-  },
+  }
 };
