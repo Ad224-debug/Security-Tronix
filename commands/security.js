@@ -29,14 +29,67 @@ module.exports = {
       const ipRegex = /^(\d{1,3}\.){3}\d{1,3}$/;
       if (!ipRegex.test(ip)) return interaction.editReply({ content: '❌ Formato de IP inválido.' });
       const parts = ip.split('.').map(Number);
-      if (parts[0] === 10 || parts[0] === 127 || (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) || (parts[0] === 192 && parts[1] === 168)) return interaction.editReply({ content: '❌ No se pueden consultar IPs privadas.' });
+      if (parts[0] === 10 || parts[0] === 127 || (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) || (parts[0] === 192 && parts[1] === 168))
+        return interaction.editReply({ content: '❌ No se pueden consultar IPs privadas.' });
       try {
-        const res = await fetch(`http://ip-api.com/json/${ip}?fields=status,message,country,countryCode,regionName,city,timezone,isp,org,as,proxy,hosting,query`);
-        const data = await res.json();
-        if (data.status === 'fail') return interaction.editReply({ content: `❌ ${data.message}` });
-        const riskLevel = data.proxy || data.hosting ? '🔴 Alto' : '🟢 Bajo';
-        return interaction.editReply({ embeds: [new EmbedBuilder().setTitle(`🌐 IP: ${ip}`).setColor(data.proxy || data.hosting ? 0xED4245 : 0x57F287).addFields({ name: '🌍 País', value: `${data.country}`, inline: true }, { name: '🏙️ Ciudad', value: `${data.city}, ${data.regionName}`, inline: true }, { name: '🕐 Zona horaria', value: data.timezone || 'N/A', inline: true }, { name: '🏢 ISP', value: data.isp || 'N/A', inline: true }, { name: '🔒 Proxy/VPN', value: data.proxy ? '⚠️ Detectado' : '✅ No', inline: true }, { name: '🖥️ Hosting', value: data.hosting ? '⚠️ Sí' : '✅ No', inline: true }, { name: '⚠️ Riesgo', value: riskLevel, inline: true }).setFooter({ text: 'ip-api.com' }).setTimestamp()] });
-      } catch { return interaction.editReply({ content: '❌ Error al consultar la IP.' }); }
+        // ip-api.com (sin key, gratis)
+        const geoRes = await fetch(`http://ip-api.com/json/${ip}?fields=status,message,country,countryCode,regionName,city,timezone,isp,org,as,proxy,hosting,query`);
+        const geo = await geoRes.json();
+        if (geo.status === 'fail') return interaction.editReply({ content: `❌ ${geo.message}` });
+
+        // AbuseIPDB (requiere key)
+        let abuseScore = null;
+        let abuseReports = null;
+        let abuseLastReport = null;
+        const abuseKey = process.env.ABUSEIPDB_KEY;
+        if (abuseKey) {
+          try {
+            const abuseRes = await fetch(`https://api.abuseipdb.com/api/v2/check?ipAddress=${ip}&maxAgeInDays=90&verbose`, {
+              headers: { Key: abuseKey, Accept: 'application/json' }
+            });
+            const abuseData = await abuseRes.json();
+            if (abuseData.data) {
+              abuseScore = abuseData.data.abuseConfidenceScore;
+              abuseReports = abuseData.data.totalReports;
+              abuseLastReport = abuseData.data.lastReportedAt;
+            }
+          } catch { /* silently skip */ }
+        }
+
+        // Calcular riesgo combinado
+        const isRisky = geo.proxy || geo.hosting || (abuseScore !== null && abuseScore >= 25);
+        const color = abuseScore >= 75 ? 0xED4245 : isRisky ? 0xFFA500 : 0x57F287;
+        const riskLabel = abuseScore >= 75 ? '🔴 ALTO' : isRisky ? '🟡 MEDIO' : '🟢 BAJO';
+
+        const embed = new EmbedBuilder()
+          .setTitle(`🌐 IP: ${ip}`)
+          .setColor(color)
+          .addFields(
+            { name: '🌍 País', value: `${geo.country} (${geo.countryCode})`, inline: true },
+            { name: '🏙️ Ciudad', value: `${geo.city}, ${geo.regionName}`, inline: true },
+            { name: '🕐 Zona horaria', value: geo.timezone || 'N/A', inline: true },
+            { name: '🏢 ISP', value: geo.isp || 'N/A', inline: true },
+            { name: '🔒 Proxy/VPN', value: geo.proxy ? '⚠️ Detectado' : '✅ No', inline: true },
+            { name: '🖥️ Hosting/DC', value: geo.hosting ? '⚠️ Sí' : '✅ No', inline: true },
+            { name: '⚠️ Riesgo general', value: riskLabel, inline: true }
+          );
+
+        if (abuseScore !== null) {
+          embed.addFields(
+            { name: '🛡️ AbuseIPDB Score', value: `**${abuseScore}%** de abuso`, inline: true },
+            { name: '📋 Reportes (90d)', value: `${abuseReports}`, inline: true },
+            { name: '🕒 Último reporte', value: abuseLastReport ? `<t:${Math.floor(new Date(abuseLastReport).getTime() / 1000)}:R>` : 'Nunca', inline: true }
+          );
+        } else if (!abuseKey) {
+          embed.addFields({ name: '🛡️ AbuseIPDB', value: '⚠️ Sin API key (`ABUSEIPDB_KEY`)', inline: false });
+        }
+
+        embed.setFooter({ text: 'ip-api.com • AbuseIPDB' }).setTimestamp();
+        return interaction.editReply({ embeds: [embed] });
+      } catch (err) {
+        console.error('[ipinfo]', err);
+        return interaction.editReply({ content: '❌ Error al consultar la IP.' });
+      }
     }
 
     // ── SCANURL ──────────────────────────────────────────────────────────────
@@ -47,13 +100,56 @@ module.exports = {
       let domain;
       try { domain = new URL(url).hostname; } catch { return interaction.editReply({ content: '❌ URL inválida.' }); }
       try {
-        const checks = await Promise.allSettled([
-          fetch('https://urlhaus-api.abuse.ch/v1/url/', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: `url=${encodeURIComponent(url)}` }).then(r => r.json())
-        ]);
+        const vtKey = process.env.VIRUSTOTAL_KEY;
         const threats = [];
         let isMalicious = false;
-        const urlhausResult = checks[0].status === 'fulfilled' ? checks[0].value : null;
-        if (urlhausResult?.url_status === 'online') { threats.push('🦠 **URLhaus**: URL de malware activa'); isMalicious = true; }
+        let vtStats = null;
+
+        // ── URLhaus (sin key) ──────────────────────────────────────────────
+        const urlhausRes = await fetch('https://urlhaus-api.abuse.ch/v1/url/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: `url=${encodeURIComponent(url)}`
+        }).then(r => r.json()).catch(() => null);
+        if (urlhausRes?.url_status === 'online') {
+          threats.push('🦠 **URLhaus**: URL de malware activa');
+          isMalicious = true;
+        }
+
+        // ── VirusTotal (requiere key) ──────────────────────────────────────
+        if (vtKey) {
+          try {
+            // Enviar URL para análisis
+            const vtSubmit = await fetch('https://www.virustotal.com/api/v3/urls', {
+              method: 'POST',
+              headers: { 'x-apikey': vtKey, 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: `url=${encodeURIComponent(url)}`
+            });
+            const vtSubmitData = await vtSubmit.json();
+            const analysisId = vtSubmitData.data?.id;
+
+            if (analysisId) {
+              // Esperar un momento y obtener resultados
+              await new Promise(r => setTimeout(r, 3000));
+              const vtResult = await fetch(`https://www.virustotal.com/api/v3/analyses/${analysisId}`, {
+                headers: { 'x-apikey': vtKey }
+              });
+              const vtData = await vtResult.json();
+              const stats = vtData.data?.attributes?.stats;
+              if (stats) {
+                vtStats = stats;
+                if (stats.malicious > 0) {
+                  threats.push(`🔴 **VirusTotal**: ${stats.malicious} motor(es) detectaron malware`);
+                  isMalicious = true;
+                } else if (stats.suspicious > 0) {
+                  threats.push(`🟡 **VirusTotal**: ${stats.suspicious} motor(es) lo marcan como sospechoso`);
+                }
+              }
+            }
+          } catch { /* silently skip */ }
+        }
+
+        // ── Patrones heurísticos ───────────────────────────────────────────
         const suspiciousPatterns = [
           { pattern: /discord\.gift|discordnitro|free-nitro/i, label: '⚠️ Posible scam de Discord Nitro' },
           { pattern: /bit\.ly|tinyurl|t\.co/i, label: '⚠️ URL acortada' },
@@ -61,15 +157,40 @@ module.exports = {
           { pattern: /login.*steam|steam.*login/i, label: '⚠️ Posible phishing de Steam' },
           { pattern: /free.*robux|robux.*free/i, label: '⚠️ Posible scam de Roblox' }
         ];
-        for (const { pattern, label } of suspiciousPatterns) { if (pattern.test(url)) threats.push(label); }
+        for (const { pattern, label } of suspiciousPatterns) {
+          if (pattern.test(url)) threats.push(label);
+        }
+
         const color = isMalicious ? 0xED4245 : threats.length > 0 ? 0xFFA500 : 0x57F287;
         const status = isMalicious ? '🔴 MALICIOSA' : threats.length > 0 ? '🟡 SOSPECHOSA' : '🟢 LIMPIA';
-        const embed = new EmbedBuilder().setTitle('🔍 Análisis de URL').setColor(color).addFields({ name: '🌐 URL', value: `\`${url.slice(0, 200)}\`` }, { name: '🏷️ Dominio', value: domain, inline: true }, { name: '📊 Estado', value: status, inline: true });
-        if (threats.length > 0) embed.addFields({ name: '⚠️ Amenazas', value: threats.join('\n') });
+
+        const embed = new EmbedBuilder()
+          .setTitle('🔍 Análisis de URL')
+          .setColor(color)
+          .addFields(
+            { name: '🌐 URL', value: `\`${url.slice(0, 200)}\`` },
+            { name: '🏷️ Dominio', value: domain, inline: true },
+            { name: '📊 Estado', value: status, inline: true }
+          );
+
+        if (vtStats) {
+          embed.addFields({
+            name: '🧬 VirusTotal (motores)',
+            value: `🔴 Malicioso: **${vtStats.malicious}** | 🟡 Sospechoso: **${vtStats.suspicious}** | ✅ Limpio: **${vtStats.harmless}** | ⬜ Sin datos: **${vtStats.undetected}**`
+          });
+        } else if (!vtKey) {
+          embed.addFields({ name: '🧬 VirusTotal', value: '⚠️ Sin API key (`VIRUSTOTAL_KEY`)' });
+        }
+
+        if (threats.length > 0) embed.addFields({ name: '⚠️ Amenazas detectadas', value: threats.join('\n') });
         else embed.addFields({ name: '✅ Sin amenazas', value: 'No se encontraron amenazas conocidas.' });
-        embed.setFooter({ text: 'URLhaus • Análisis heurístico' }).setTimestamp();
+
+        embed.setFooter({ text: 'URLhaus • VirusTotal • Análisis heurístico' }).setTimestamp();
         return interaction.editReply({ embeds: [embed] });
-      } catch { return interaction.editReply({ content: '❌ Error al analizar la URL.' }); }
+      } catch (err) {
+        console.error('[scanurl]', err);
+        return interaction.editReply({ content: '❌ Error al analizar la URL.' });
+      }
     }
 
     // ── USERCHECK ────────────────────────────────────────────────────────────
