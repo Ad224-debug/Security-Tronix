@@ -17,6 +17,7 @@ module.exports = {
     const canal = interaction.options.getChannel('canal') || interaction.channel;
     const limite = interaction.options.getInteger('limite') || 100;
 
+    // Defer ephemeral - solo el moderador ve el resultado
     await interaction.deferReply({ ephemeral: true });
 
     try {
@@ -24,7 +25,6 @@ module.exports = {
       let revisados = 0;
       let lastId = null;
 
-      // Buscar en lotes de 100
       while (revisados < limite) {
         const fetchLimit = Math.min(100, limite - revisados);
         const options = { limit: fetchLimit };
@@ -36,11 +36,12 @@ module.exports = {
         revisados += messages.size;
         lastId = messages.last().id;
 
-        // Filtrar mensajes que contengan la palabra
-        const toDelete = messages.filter(m => m.content.toLowerCase().includes(palabra));
+        // Solo mensajes de usuarios (no bots) que contengan la palabra
+        const toDelete = messages.filter(m =>
+          !m.author.bot && m.content.toLowerCase().includes(palabra)
+        );
 
         if (toDelete.size > 0) {
-          // bulkDelete solo funciona con mensajes < 14 días
           const recent = toDelete.filter(m => Date.now() - m.createdTimestamp < 14 * 24 * 60 * 60 * 1000);
           const old = toDelete.filter(m => Date.now() - m.createdTimestamp >= 14 * 24 * 60 * 60 * 1000);
 
@@ -49,31 +50,33 @@ module.exports = {
             eliminados += deleted.size;
           }
 
-          // Mensajes viejos: eliminar uno por uno
           for (const [, msg] of old) {
             try {
               await msg.delete();
               eliminados++;
-              await new Promise(r => setTimeout(r, 500)); // rate limit
-            } catch { /* sin permisos o ya eliminado */ }
+              await new Promise(r => setTimeout(r, 500));
+            } catch { /* ya eliminado o sin permisos */ }
           }
         }
 
         if (messages.size < fetchLimit) break;
       }
 
+      // Un solo embed con el resumen final
       const embed = new EmbedBuilder()
-        .setTitle('🗑️ Mensajes Eliminados')
+        .setTitle('🗑️ Limpieza Completada')
         .setColor(0xE74C3C)
         .addFields(
           { name: 'Palabra buscada', value: `\`${palabra}\``, inline: true },
           { name: 'Canal', value: `${canal}`, inline: true },
           { name: 'Mensajes revisados', value: `${revisados}`, inline: true },
-          { name: 'Mensajes eliminados', value: `${eliminados}`, inline: true }
+          { name: 'Mensajes eliminados', value: `**${eliminados}**`, inline: true }
         )
+        .setFooter({ text: `Ejecutado por ${interaction.user.tag}` })
         .setTimestamp();
 
       await interaction.editReply({ embeds: [embed] });
+
     } catch (error) {
       console.error('Error en deletespecificmessages:', error);
       await interaction.editReply({ content: '❌ Error al eliminar mensajes. Verifica que el bot tenga permisos de Manage Messages.' });
