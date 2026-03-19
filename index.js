@@ -914,9 +914,18 @@ client.on('interactionCreate', async (interaction) => {
     return;
   }
 
-  if (!interaction.isChatInputCommand()) return;
+  // Manejar botones y modals de automod
+  if ((interaction.isButton() || interaction.isModalSubmit()) && interaction.customId?.startsWith('am_')) {
+    try {
+      const automodCmd = client.commands.get('automod');
+      if (automodCmd?.handleInteraction) await automodCmd.handleInteraction(interaction);
+    } catch (e) {
+      console.error('Error en automod interaction:', e);
+    }
+    return;
+  }
 
-  const command = client.commands.get(interaction.commandName);
+  if (!interaction.isChatInputCommand()) return;
 
   if (!command) return;
 

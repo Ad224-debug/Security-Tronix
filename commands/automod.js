@@ -1,207 +1,175 @@
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const {
+  SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder,
+  ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder,
+  TextInputBuilder, TextInputStyle
+} = require('discord.js');
 const fs = require('fs');
 const path = require('path');
+
+const automodPath = path.join(__dirname, '../data/automod.json');
+
+function loadAutomod(guildId) {
+  let data = {};
+  if (fs.existsSync(automodPath)) data = JSON.parse(fs.readFileSync(automodPath, 'utf8'));
+  if (!data[guildId]) {
+    data[guildId] = {
+      spam:     { enabled: false, messages: 5, seconds: 5 },
+      mentions: { enabled: false, maxMentions: 5 },
+      links:    { enabled: false },
+      invites:  { enabled: false },
+      caps:     { enabled: false, percentage: 70 },
+      nsfw:     { enabled: true }
+    };
+  }
+  return data;
+}
+
+function saveAutomod(data) {
+  const dir = path.join(__dirname, '../data');
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(automodPath, JSON.stringify(data, null, 2));
+}
+
+function buildPanel(cfg) {
+  const s = (v) => v ? '🟢' : '🔴';
+
+  const embed = new EmbedBuilder()
+    .setTitle('⚙️ Panel de Auto-Moderación')
+    .setColor(0x5865F2)
+    .setDescription('Usa los botones para activar/desactivar módulos o configurar sus valores.')
+    .addFields(
+      { name: `${s(cfg.spam.enabled)} Anti-Spam`,           value: cfg.spam.enabled     ? `${cfg.spam.messages} msgs / ${cfg.spam.seconds}s`  : 'Desactivado', inline: true },
+      { name: `${s(cfg.mentions.enabled)} Menciones Masivas`, value: cfg.mentions.enabled ? `Max ${cfg.mentions.maxMentions} menciones`          : 'Desactivado', inline: true },
+      { name: `${s(cfg.links.enabled)} Filtro de Links`,    value: cfg.links.enabled    ? 'Activado'                                           : 'Desactivado', inline: true },
+      { name: `${s(cfg.invites.enabled)} Filtro de Invites`,value: cfg.invites.enabled  ? 'Activado'                                           : 'Desactivado', inline: true },
+      { name: `${s(cfg.caps.enabled)} Mayúsculas Excesivas`,value: cfg.caps.enabled     ? `Max ${cfg.caps.percentage}%`                        : 'Desactivado', inline: true },
+      { name: `${s(cfg.nsfw?.enabled)} Filtro NSFW`,        value: cfg.nsfw?.enabled    ? 'Activado'                                           : 'Desactivado', inline: true }
+    )
+    .setFooter({ text: '🟢 = Activo  |  🔴 = Inactivo' })
+    .setTimestamp();
+
+  // Fila 1: toggles
+  const row1 = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId('am_toggle_spam')     .setLabel('Spam')     .setStyle(cfg.spam.enabled     ? ButtonStyle.Success : ButtonStyle.Danger).setEmoji('📨'),
+    new ButtonBuilder().setCustomId('am_toggle_mentions') .setLabel('Menciones').setStyle(cfg.mentions.enabled ? ButtonStyle.Success : ButtonStyle.Danger).setEmoji('👥'),
+    new ButtonBuilder().setCustomId('am_toggle_links')    .setLabel('Links')    .setStyle(cfg.links.enabled    ? ButtonStyle.Success : ButtonStyle.Danger).setEmoji('🔗'),
+    new ButtonBuilder().setCustomId('am_toggle_invites')  .setLabel('Invites')  .setStyle(cfg.invites.enabled  ? ButtonStyle.Success : ButtonStyle.Danger).setEmoji('📧'),
+    new ButtonBuilder().setCustomId('am_toggle_caps')     .setLabel('Caps')     .setStyle(cfg.caps.enabled     ? ButtonStyle.Success : ButtonStyle.Danger).setEmoji('🔠')
+  );
+
+  // Fila 2: NSFW toggle + botones de configuración
+  const row2 = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId('am_toggle_nsfw')     .setLabel('NSFW')     .setStyle(cfg.nsfw?.enabled    ? ButtonStyle.Success : ButtonStyle.Danger).setEmoji('🔞'),
+    new ButtonBuilder().setCustomId('am_config_spam')     .setLabel('Config Spam')    .setStyle(ButtonStyle.Secondary).setEmoji('⚙️'),
+    new ButtonBuilder().setCustomId('am_config_mentions') .setLabel('Config Menciones').setStyle(ButtonStyle.Secondary).setEmoji('⚙️'),
+    new ButtonBuilder().setCustomId('am_config_caps')     .setLabel('Config Caps')    .setStyle(ButtonStyle.Secondary).setEmoji('⚙️')
+  );
+
+  return { embed, components: [row1, row2] };
+}
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('automod')
-    .setDescription('Configure auto-moderation settings')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
-    .addSubcommand(subcommand =>
-      subcommand
-        .setName('spam')
-        .setDescription('Configure spam detection')
-        .addBooleanOption(option =>
-          option.setName('enabled')
-            .setDescription('Enable spam detection')
-            .setRequired(true))
-        .addIntegerOption(option =>
-          option.setName('messages')
-            .setDescription('Max messages in timeframe (default: 5)')
-            .setMinValue(2)
-            .setMaxValue(20)
-            .setRequired(false))
-        .addIntegerOption(option =>
-          option.setName('seconds')
-            .setDescription('Timeframe in seconds (default: 5)')
-            .setMinValue(1)
-            .setMaxValue(60)
-            .setRequired(false)))
-    .addSubcommand(subcommand =>
-      subcommand
-        .setName('mentions')
-        .setDescription('Configure mass mention detection')
-        .addBooleanOption(option =>
-          option.setName('enabled')
-            .setDescription('Enable mass mention detection')
-            .setRequired(true))
-        .addIntegerOption(option =>
-          option.setName('max_mentions')
-            .setDescription('Max mentions per message (default: 5)')
-            .setMinValue(1)
-            .setMaxValue(50)
-            .setRequired(false)))
-    .addSubcommand(subcommand =>
-      subcommand
-        .setName('links')
-        .setDescription('Configure link filtering')
-        .addBooleanOption(option =>
-          option.setName('enabled')
-            .setDescription('Enable link filtering')
-            .setRequired(true)))
-    .addSubcommand(subcommand =>
-      subcommand
-        .setName('invites')
-        .setDescription('Configure Discord invite filtering')
-        .addBooleanOption(option =>
-          option.setName('enabled')
-            .setDescription('Enable invite filtering')
-            .setRequired(true)))
-    .addSubcommand(subcommand =>
-      subcommand
-        .setName('caps')
-        .setDescription('Configure excessive caps detection')
-        .addBooleanOption(option =>
-          option.setName('enabled')
-            .setDescription('Enable caps detection')
-            .setRequired(true))
-        .addIntegerOption(option =>
-          option.setName('percentage')
-            .setDescription('Max percentage of caps (default: 70)')
-            .setMinValue(10)
-            .setMaxValue(100)
-            .setRequired(false)))
-    .addSubcommand(subcommand =>
-      subcommand
-        .setName('nsfw')
-        .setDescription('Configure NSFW content detection')
-        .addBooleanOption(option =>
-          option.setName('enabled')
-            .setDescription('Enable NSFW detection (always recommended)')
-            .setRequired(true)))
-    .addSubcommand(subcommand =>
-      subcommand
-        .setName('view')
-        .setDescription('View current auto-mod settings')),
+    .setDescription('Panel de configuración de auto-moderación')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
   async execute(interaction) {
-    const lang = interaction.client.getLanguage(interaction.guild.id);
-    const subcommand = interaction.options.getSubcommand();
-    const automodPath = path.join(__dirname, '../data/automod.json');
-    
-    let automod = {};
-    if (fs.existsSync(automodPath)) {
-      automod = JSON.parse(fs.readFileSync(automodPath, 'utf8'));
-    }
-
-    if (!automod[interaction.guild.id]) {
-      automod[interaction.guild.id] = {
-        spam: { enabled: false, messages: 5, seconds: 5 },
-        mentions: { enabled: false, maxMentions: 5 },
-        links: { enabled: false },
-        invites: { enabled: false },
-        caps: { enabled: false, percentage: 70 },
-        nsfw: { enabled: true } // Activado por defecto
-      };
-    }
-
-    const guildAutomod = automod[interaction.guild.id];
-
-    if (subcommand === 'view') {
-      const embed = new EmbedBuilder()
-        .setTitle(lang === 'es' ? '⚙️ Configuración de Auto-Moderación' : '⚙️ Auto-Moderation Settings')
-        .setColor(0x5865F2)
-        .addFields(
-          { 
-            name: lang === 'es' ? '📨 Anti-Spam' : '📨 Anti-Spam', 
-            value: `${guildAutomod.spam.enabled ? '✅' : '❌'} ${guildAutomod.spam.enabled ? `(${guildAutomod.spam.messages} ${lang === 'es' ? 'mensajes' : 'messages'} / ${guildAutomod.spam.seconds}s)` : ''}`,
-            inline: true 
-          },
-          { 
-            name: lang === 'es' ? '👥 Menciones Masivas' : '👥 Mass Mentions', 
-            value: `${guildAutomod.mentions.enabled ? '✅' : '❌'} ${guildAutomod.mentions.enabled ? `(max ${guildAutomod.mentions.maxMentions})` : ''}`,
-            inline: true 
-          },
-          { 
-            name: lang === 'es' ? '🔗 Filtro de Links' : '🔗 Link Filter', 
-            value: guildAutomod.links.enabled ? '✅' : '❌',
-            inline: true 
-          },
-          { 
-            name: lang === 'es' ? '📧 Filtro de Invitaciones' : '📧 Invite Filter', 
-            value: guildAutomod.invites.enabled ? '✅' : '❌',
-            inline: true 
-          },
-          { 
-            name: lang === 'es' ? '🔠 Mayúsculas Excesivas' : '🔠 Excessive Caps', 
-            value: `${guildAutomod.caps.enabled ? '✅' : '❌'} ${guildAutomod.caps.enabled ? `(max ${guildAutomod.caps.percentage}%)` : ''}`,
-            inline: true 
-          },
-          { 
-            name: lang === 'es' ? '🔞 Filtro NSFW' : '🔞 NSFW Filter', 
-            value: guildAutomod.nsfw?.enabled ? '✅' : '❌',
-            inline: true 
-          }
-        )
-        .setTimestamp();
-
-      return await interaction.reply({ embeds: [embed], ephemeral: true });
-    }
-
-    const enabled = interaction.options.getBoolean('enabled');
-
-    switch (subcommand) {
-      case 'spam':
-        guildAutomod.spam.enabled = enabled;
-        if (enabled) {
-          guildAutomod.spam.messages = interaction.options.getInteger('messages') || 5;
-          guildAutomod.spam.seconds = interaction.options.getInteger('seconds') || 5;
-        }
-        break;
-
-      case 'mentions':
-        guildAutomod.mentions.enabled = enabled;
-        if (enabled) {
-          guildAutomod.mentions.maxMentions = interaction.options.getInteger('max_mentions') || 5;
-        }
-        break;
-
-      case 'links':
-        guildAutomod.links.enabled = enabled;
-        break;
-
-      case 'invites':
-        guildAutomod.invites.enabled = enabled;
-        break;
-
-      case 'caps':
-        guildAutomod.caps.enabled = enabled;
-        if (enabled) {
-          guildAutomod.caps.percentage = interaction.options.getInteger('percentage') || 70;
-        }
-        break;
-
-      case 'nsfw':
-        if (!guildAutomod.nsfw) guildAutomod.nsfw = {};
-        guildAutomod.nsfw.enabled = enabled;
-        break;
-    }
-
-    automod[interaction.guild.id] = guildAutomod;
-
-    // Crear directorio si no existe
-    const dataDir = path.join(__dirname, '../data');
-    if (!fs.existsSync(dataDir)) {
-      fs.mkdirSync(dataDir, { recursive: true });
-    }
-
-    fs.writeFileSync(automodPath, JSON.stringify(automod, null, 2));
-
-    await interaction.reply({
-      content: lang === 'es' 
-        ? `✅ Configuración de auto-moderación actualizada: **${subcommand}** ${enabled ? 'activado' : 'desactivado'}`
-        : `✅ Auto-moderation setting updated: **${subcommand}** ${enabled ? 'enabled' : 'disabled'}`,
-      ephemeral: true
-    });
+    const data = loadAutomod(interaction.guild.id);
+    const cfg = data[interaction.guild.id];
+    const { embed, components } = buildPanel(cfg);
+    await interaction.reply({ embeds: [embed], components, ephemeral: true });
   },
+
+  // Handler de botones e interacciones - se llama desde index.js
+  async handleInteraction(interaction) {
+    if (!interaction.customId?.startsWith('am_')) return false;
+
+    const guildId = interaction.guild.id;
+    const data = loadAutomod(guildId);
+    const cfg = data[guildId];
+
+    // --- MODALS de configuración ---
+    if (interaction.isModalSubmit()) {
+      if (interaction.customId === 'am_modal_spam') {
+        const msgs = parseInt(interaction.fields.getTextInputValue('spam_messages')) || 5;
+        const secs = parseInt(interaction.fields.getTextInputValue('spam_seconds')) || 5;
+        cfg.spam.messages = Math.min(Math.max(msgs, 2), 20);
+        cfg.spam.seconds  = Math.min(Math.max(secs, 1), 60);
+        saveAutomod(data);
+        const { embed, components } = buildPanel(cfg);
+        return interaction.update({ embeds: [embed], components });
+      }
+      if (interaction.customId === 'am_modal_mentions') {
+        const max = parseInt(interaction.fields.getTextInputValue('mentions_max')) || 5;
+        cfg.mentions.maxMentions = Math.min(Math.max(max, 1), 50);
+        saveAutomod(data);
+        const { embed, components } = buildPanel(cfg);
+        return interaction.update({ embeds: [embed], components });
+      }
+      if (interaction.customId === 'am_modal_caps') {
+        const pct = parseInt(interaction.fields.getTextInputValue('caps_pct')) || 70;
+        cfg.caps.percentage = Math.min(Math.max(pct, 10), 100);
+        saveAutomod(data);
+        const { embed, components } = buildPanel(cfg);
+        return interaction.update({ embeds: [embed], components });
+      }
+      return false;
+    }
+
+    if (!interaction.isButton()) return false;
+
+    // --- TOGGLES ---
+    const toggleMap = {
+      am_toggle_spam:     () => { cfg.spam.enabled     = !cfg.spam.enabled; },
+      am_toggle_mentions: () => { cfg.mentions.enabled = !cfg.mentions.enabled; },
+      am_toggle_links:    () => { cfg.links.enabled    = !cfg.links.enabled; },
+      am_toggle_invites:  () => { cfg.invites.enabled  = !cfg.invites.enabled; },
+      am_toggle_caps:     () => { cfg.caps.enabled     = !cfg.caps.enabled; },
+      am_toggle_nsfw:     () => { if (!cfg.nsfw) cfg.nsfw = {}; cfg.nsfw.enabled = !cfg.nsfw.enabled; },
+    };
+
+    if (toggleMap[interaction.customId]) {
+      toggleMap[interaction.customId]();
+      saveAutomod(data);
+      const { embed, components } = buildPanel(cfg);
+      return interaction.update({ embeds: [embed], components });
+    }
+
+    // --- CONFIG MODALS ---
+    if (interaction.customId === 'am_config_spam') {
+      const modal = new ModalBuilder().setCustomId('am_modal_spam').setTitle('Configurar Anti-Spam');
+      modal.addComponents(
+        new ActionRowBuilder().addComponents(
+          new TextInputBuilder().setCustomId('spam_messages').setLabel('Máximo de mensajes').setStyle(TextInputStyle.Short).setValue(String(cfg.spam.messages)).setRequired(true)
+        ),
+        new ActionRowBuilder().addComponents(
+          new TextInputBuilder().setCustomId('spam_seconds').setLabel('Ventana de tiempo (segundos)').setStyle(TextInputStyle.Short).setValue(String(cfg.spam.seconds)).setRequired(true)
+        )
+      );
+      return interaction.showModal(modal);
+    }
+
+    if (interaction.customId === 'am_config_mentions') {
+      const modal = new ModalBuilder().setCustomId('am_modal_mentions').setTitle('Configurar Menciones Masivas');
+      modal.addComponents(
+        new ActionRowBuilder().addComponents(
+          new TextInputBuilder().setCustomId('mentions_max').setLabel('Máximo de menciones por mensaje').setStyle(TextInputStyle.Short).setValue(String(cfg.mentions.maxMentions)).setRequired(true)
+        )
+      );
+      return interaction.showModal(modal);
+    }
+
+    if (interaction.customId === 'am_config_caps') {
+      const modal = new ModalBuilder().setCustomId('am_modal_caps').setTitle('Configurar Mayúsculas Excesivas');
+      modal.addComponents(
+        new ActionRowBuilder().addComponents(
+          new TextInputBuilder().setCustomId('caps_pct').setLabel('Porcentaje máximo de mayúsculas (10-100)').setStyle(TextInputStyle.Short).setValue(String(cfg.caps.percentage)).setRequired(true)
+        )
+      );
+      return interaction.showModal(modal);
+    }
+
+    return false;
+  }
 };
