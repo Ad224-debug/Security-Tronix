@@ -505,24 +505,14 @@ async function analyzeAndSendReputation(member) {
   if (!fs.existsSync(configPath)) return;
   const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
 
-  // Canal de join-check o fallback al canal de logs
   const channelId = config.joinCheckChannels?.[member.guild.id] || config.logChannels?.[member.guild.id];
   if (!channelId) return;
 
   const channel = await member.guild.channels.fetch(channelId).catch(() => null);
   if (!channel) return;
 
-  const user = member.user;
-  const warningsPath = path.join(__dirname, 'warnings.json');
-  const casesPath = path.join(__dirname, 'data/mod-cases.json');
-  const warnings = fs.existsSync(warningsPath) ? JSON.parse(fs.readFileSync(warningsPath, 'utf8')) : {};
-  const cases = fs.existsSync(casesPath) ? JSON.parse(fs.readFileSync(casesPath, 'utf8')) : {};
-
-  const userWarnings = warnings[`${member.guild.id}-${user.id}`] || [];
-  const guildCases = (cases[member.guild.id] || []).filter(c => c.targetId === user.id);
-  const bans = guildCases.filter(c => c.type === 'ban' || c.type === 'tempban').length;
-  const kicks = guildCases.filter(c => c.type === 'kick').length;
-  const timeouts = guildCases.filter(c => c.type === 'timeout').length;
+  // Fetch completo del usuario para obtener flags, banner, bio, etc.
+  const user = await member.user.fetch().catch(() => member.user);
 
   const accountAgeDays = Math.floor((Date.now() - user.createdTimestamp) / 86400000);
   const accountAgeYears = Math.floor(accountAgeDays / 365);
@@ -530,49 +520,99 @@ async function analyzeAndSendReputation(member) {
     ? `${accountAgeYears} año(s), ${accountAgeDays % 365} día(s)`
     : `${accountAgeDays} día(s)`;
 
-  // Calcular puntuación de riesgo
-  let riskScore = 0;
-  const flags = [];
+  // ── Señales de confianza (suman puntos positivos) ──────────────────────────
+  // Empezamos en 0 y sumamos confianza, luego restamos riesgo
+  let trustScore = 0;
+  const trustSignals = [];
+  const riskSignals = [];
 
-  if (accountAgeDays < 3)  { riskScore += 40; flags.push('🚨 Cuenta muy nueva (<3 días)'); }
-  else if (accountAgeDays < 7)  { riskScore += 25; flags.push('⚠️ Cuenta nueva (<7 días)'); }
-  else if (accountAgeDays < 30) { riskScore += 10; flags.push('⚠️ Cuenta reciente (<30 días)'); }
+  // Edad de la cuenta
+  if (accountAgeDays >= 365 * 3) { trustScore += 30; trustSignals.push('📅 Cuenta con más de 3 años'); }
+  else if (accountAgeDays >= 365) { trustScore += 20; trustSignals.push('📅 Cuenta con más de 1 año'); }
+  else if (accountAgeDays >= 180) { trustScore += 10; trustSignals.push('📅 Cuenta con más de 6 meses'); }
+  else if (accountAgeDays >= 30)  { trustScore += 5; }
+  else if (accountAgeDays < 3)    { trustScore -= 40; riskSignals.push('🚨 Cuenta muy nueva (<3 días)'); }
+  else if (accountAgeDays < 7)    { trustScore -= 25; riskSignals.push('⚠️ Cuenta nueva (<7 días)'); }
+  else if (accountAgeDays < 30)   { trustScore -= 10; riskSignals.push('⚠️ Cuenta reciente (<30 días)'); }
 
-  if (!user.avatar) { riskScore += 10; flags.push('⚠️ Sin avatar'); }
-  if (/free.*nitro|nitro.*free|discord.*gift/i.test(user.username)) { riskScore += 35; flags.push('🚨 Nombre sospechoso (Nitro/Gift)'); }
-  if (/admin|moderator|staff|official/i.test(user.username)) { riskScore += 20; flags.push('⚠️ Nombre que imita staff'); }
+  // Avatar
+  if (user.avatar) { trustScore += 10; trustSignals.push('🖼️ Tiene avatar personalizado'); }
+  else { trustScore -= 10; riskSignals.push('⚠️ Sin avatar (cuenta por defecto)'); }
 
-  riskScore += userWarnings.length * 5 + kicks * 15 + bans * 30 + timeouts * 10;
-  if (userWarnings.length > 0) flags.push(`📋 ${userWarnings.length} advertencia(s) en este servidor`);
-  if (kicks > 0) flags.push(`👢 ${kicks} kick(s) en este servidor`);
-  if (bans > 0) flags.push(`🔨 ${bans} ban(s) en este servidor`);
+  // Banner de perfil
+  if (user.banner) { trustScore += 10; trustSignals.push('🎨 Tiene banner de perfil'); }
 
-  const riskLevel = riskScore >= 60 ? '🔴 ALTO' : riskScore >= 30 ? '🟡 MEDIO' : '🟢 BAJO';
-  const color = riskScore >= 60 ? 0xED4245 : riskScore >= 30 ? 0xFFA500 : 0x57F287;
+  // Bio / About Me (solo disponible con fetch completo)
+  if (user.bio) { trustScore += 5; trustSignals.push('📝 Tiene bio en el perfil'); }
 
-  const isPending = member.pending;
-  const joinType = isPending ? '📋 Aprobó formulario de acceso' : '📥 Se unió al servidor';
+  // Nitro (premiumType: 0=none, 1=Nitro Classic, 2=Nitro, 3=Nitro Basic)
+  if (user.premiumType && user.premiumType > 0) {
+    trustScore += 20;
+    const nitroTypes = { 1: 'Nitro Classic', 2: 'Nitro', 3: 'Nitro Basic' };
+    trustSignals.push(`💎 Tiene Discord ${nitroTypes[user.premiumType] || 'Nitro'}`);
+  }
+
+  // Flags de la cuenta (UserFlags de Discord)
+  const { UserFlags } = require('discord.js');
+  const flags = user.flags;
+  if (flags) {
+    if (flags.has(UserFlags.Staff))                    { trustScore += 50; trustSignals.push('👑 Discord Staff'); }
+    if (flags.has(UserFlags.Partner))                  { trustScore += 40; trustSignals.push('🤝 Discord Partner'); }
+    if (flags.has(UserFlags.BugHunterLevel1))          { trustScore += 15; trustSignals.push('🐛 Bug Hunter'); }
+    if (flags.has(UserFlags.BugHunterLevel2))          { trustScore += 25; trustSignals.push('🐛 Bug Hunter Gold'); }
+    if (flags.has(UserFlags.ActiveDeveloper))          { trustScore += 20; trustSignals.push('👨‍💻 Active Developer'); }
+    if (flags.has(UserFlags.VerifiedDeveloper))        { trustScore += 30; trustSignals.push('✅ Verified Bot Developer'); }
+    if (flags.has(UserFlags.PremiumEarlySupporter))    { trustScore += 15; trustSignals.push('🌟 Early Nitro Supporter'); }
+    if (flags.has(UserFlags.HypeSquadOnlineHouse1))    { trustScore += 5;  trustSignals.push('🏠 HypeSquad Bravery'); }
+    if (flags.has(UserFlags.HypeSquadOnlineHouse2))    { trustScore += 5;  trustSignals.push('🏠 HypeSquad Brilliance'); }
+    if (flags.has(UserFlags.HypeSquadOnlineHouse3))    { trustScore += 5;  trustSignals.push('🏠 HypeSquad Balance'); }
+    if (flags.has(UserFlags.Quarantined))              { trustScore -= 60; riskSignals.push('🚫 Cuenta en cuarentena por Discord'); }
+    if (flags.has(UserFlags.Spammer))                  { trustScore -= 50; riskSignals.push('🚨 Marcado como spammer por Discord'); }
+  }
+
+  // Nombre sospechoso
+  if (/free.*nitro|nitro.*free|discord.*gift/i.test(user.username)) {
+    trustScore -= 35; riskSignals.push('🚨 Nombre sospechoso (Nitro/Gift scam)');
+  }
+  if (/admin|moderator|staff|official|support/i.test(user.username)) {
+    trustScore -= 20; riskSignals.push('⚠️ Nombre que imita staff/soporte');
+  }
+
+  // Clamp entre -100 y 100, luego convertir a 0-100 para mostrar
+  trustScore = Math.max(-100, Math.min(100, trustScore));
+  const displayScore = Math.round((trustScore + 100) / 2); // 0-100
+
+  // Nivel de confianza
+  let trustLevel, color;
+  if (displayScore >= 70)      { trustLevel = '🟢 ALTA';  color = 0x57F287; }
+  else if (displayScore >= 40) { trustLevel = '🟡 MEDIA'; color = 0xFFA500; }
+  else                         { trustLevel = '🔴 BAJA';  color = 0xED4245; }
+
+  const joinType = member.pending ? '📋 Aprobó formulario de acceso' : '📥 Se unió al servidor';
 
   const embed = new EmbedBuilder()
-    .setTitle(`🔍 Análisis de Reputación — ${joinType}`)
+    .setTitle(`🔍 Análisis de Confianza — ${joinType}`)
     .setColor(color)
     .setThumbnail(user.displayAvatarURL())
     .addFields(
       { name: '👤 Usuario', value: `${user} (${user.tag})`, inline: true },
       { name: '🆔 ID', value: user.id, inline: true },
-      { name: '⚠️ Nivel de riesgo', value: `${riskLevel} (${riskScore} pts)`, inline: true },
+      { name: '🏅 Confianza', value: `${trustLevel} (${displayScore}/100)`, inline: true },
       { name: '📅 Cuenta creada', value: `<t:${Math.floor(user.createdTimestamp / 1000)}:D>`, inline: true },
       { name: '⏳ Antigüedad', value: ageStr, inline: true },
-      { name: '🖼️ Avatar', value: user.avatar ? '✅ Tiene avatar' : '❌ Sin avatar', inline: true },
-      { name: '📊 Historial (este servidor)', value: `⚠️ Warns: **${userWarnings.length}** | 👢 Kicks: **${kicks}** | 🔨 Bans: **${bans}** | ⏱️ Timeouts: **${timeouts}**` }
+      { name: '💎 Nitro', value: user.premiumType > 0 ? '✅ Sí' : '❌ No', inline: true }
     )
-    .setFooter({ text: 'Tronix Security • Join Reputation Check' })
+    .setFooter({ text: 'Tronix Security • Account Trust Analysis' })
     .setTimestamp();
 
-  if (flags.length > 0) {
-    embed.addFields({ name: '🚩 Alertas detectadas', value: flags.join('\n') });
-  } else {
-    embed.addFields({ name: '✅ Sin alertas', value: 'No se detectaron señales de riesgo.' });
+  if (trustSignals.length > 0) {
+    embed.addFields({ name: '✅ Señales positivas', value: trustSignals.join('\n') });
+  }
+  if (riskSignals.length > 0) {
+    embed.addFields({ name: '🚩 Señales de riesgo', value: riskSignals.join('\n') });
+  }
+  if (trustSignals.length === 0 && riskSignals.length === 0) {
+    embed.addFields({ name: '📊 Sin señales destacadas', value: 'Cuenta sin badges ni alertas detectadas.' });
   }
 
   await channel.send({ embeds: [embed] });
