@@ -288,6 +288,8 @@ const { checkAutomod } = require('./automod-system');
 // Cachear mensajes para poder recuperarlos cuando se eliminen
 client.on('messageCreate', async (message) => {
   if (!message.guild) return;
+  if (message.author?.bot) return;
+  if (message.type !== 0 && message.type !== 19) return; // Solo mensajes normales y replies
 
   // Capturar mensajes para logs activos
   if (global.activeLogs) {
@@ -668,26 +670,19 @@ client.on('guildMemberUpdate', async (oldMember, newMember) => {
     const oldBoostStatus = oldMember.premiumSince;
     const newBoostStatus = newMember.premiumSince;
 
-    // Usuario empezó a boostear
+    // Usuario empezó a boostear (primer boost)
     if (!oldBoostStatus && newBoostStatus) {
       try {
         const boostChannel = await newMember.guild.channels.fetch(boostChannelId);
         if (boostChannel) {
           const boostCount = newMember.guild.premiumSubscriptionCount || 0;
-          const lang = getLanguage(newMember.guild.id);
-          
           const embed = new EmbedBuilder()
             .setTitle(getText(newMember.guild.id, 'boost_thanks'))
             .setDescription(`${newMember} ${getText(newMember.guild.id, 'boost_thanks_desc')}`)
             .setColor(0xFF73FA)
             .setThumbnail(newMember.user.displayAvatarURL())
-            .addFields({
-              name: getText(newMember.guild.id, 'boost_count'),
-              value: `${boostCount} boost${boostCount !== 1 ? 's' : ''}`,
-              inline: true
-            })
+            .addFields({ name: getText(newMember.guild.id, 'boost_count'), value: `${boostCount} boost${boostCount !== 1 ? 's' : ''}`, inline: true })
             .setTimestamp();
-
           await boostChannel.send({ content: `${newMember}`, embeds: [embed] });
         }
       } catch (error) {
@@ -701,26 +696,50 @@ client.on('guildMemberUpdate', async (oldMember, newMember) => {
         const boostChannel = await newMember.guild.channels.fetch(boostChannelId);
         if (boostChannel) {
           const boostCount = newMember.guild.premiumSubscriptionCount || 0;
-          const lang = getLanguage(newMember.guild.id);
-          
           const embed = new EmbedBuilder()
             .setTitle(getText(newMember.guild.id, 'boost_removed'))
             .setDescription(`${newMember} ${getText(newMember.guild.id, 'boost_removed_desc')}`)
             .setColor(0x808080)
             .setThumbnail(newMember.user.displayAvatarURL())
-            .addFields({
-              name: getText(newMember.guild.id, 'boost_removed_count'),
-              value: `${boostCount} boost${boostCount !== 1 ? 's' : ''}`,
-              inline: true
-            })
+            .addFields({ name: getText(newMember.guild.id, 'boost_removed_count'), value: `${boostCount} boost${boostCount !== 1 ? 's' : ''}`, inline: true })
             .setTimestamp();
-
           await boostChannel.send({ embeds: [embed] });
         }
       } catch (error) {
         console.error('Error sending boost removal notification:', error);
       }
     }
+  }
+});
+
+// Detectar boosts via mensajes del sistema (captura 1er y 2do boost)
+client.on('messageCreate', async (message) => {
+  // Tipo 8 = USER_PREMIUM_GUILD_SUBSCRIPTION (boost)
+  if (!message.guild || message.type !== 8) return;
+
+  const boostChannelId = getBoostChannel(message.guild.id);
+  if (!boostChannelId) return;
+
+  try {
+    const boostChannel = await message.guild.channels.fetch(boostChannelId);
+    if (!boostChannel) return;
+
+    // Refetch guild para tener el conteo actualizado
+    const guild = await message.guild.fetch();
+    const boostCount = guild.premiumSubscriptionCount || 0;
+    const member = message.member || await message.guild.members.fetch(message.author.id).catch(() => null);
+
+    const embed = new EmbedBuilder()
+      .setTitle(getText(message.guild.id, 'boost_thanks'))
+      .setDescription(`${message.author} ${getText(message.guild.id, 'boost_thanks_desc')}`)
+      .setColor(0xFF73FA)
+      .setThumbnail(message.author.displayAvatarURL())
+      .addFields({ name: getText(message.guild.id, 'boost_count'), value: `${boostCount} boost${boostCount !== 1 ? 's' : ''}`, inline: true })
+      .setTimestamp();
+
+    await boostChannel.send({ content: `${message.author}`, embeds: [embed] });
+  } catch (error) {
+    console.error('Error sending boost notification (system message):', error);
   }
 });
 
