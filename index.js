@@ -314,6 +314,8 @@ const { checkAutomod } = require('./automod-system');
 
 // Sistemas de seguridad adicionales (anti-spam, phishing, alt-detector)
 const { runSecurityChecks, runAltCheck } = require('./security-systems');
+// Sistema anti-raid
+const { checkRaid } = require('./antiraid-system');
 
 // Cachear mensajes para poder recuperarlos cuando se eliminen
 client.on('messageCreate', async (message) => {
@@ -751,6 +753,7 @@ client.on('guildMemberAdd', async (member) => {
   // (si tiene pending:true, se analizará cuando apruebe el formulario en guildMemberUpdate)
   if (!member.pending) {
     await analyzeAndSendReputation(member).catch(err => console.error('[joincheck]', err));
+    await checkRaid(member, sendLog).catch(err => console.error('[antiraid]', err));
     await runAltCheck(member, sendLog).catch(err => console.error('[altcheck]', err));
   }
 });

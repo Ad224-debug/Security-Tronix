@@ -48,7 +48,15 @@ module.exports = {
     // joincheck
     .addSubcommand(s => s.setName('joincheck').setDescription('Canal para avisos de reputación al unirse')
       .addChannelOption(o => o.setName('channel').setDescription('Canal donde se enviarán los análisis').addChannelTypes(ChannelType.GuildText))
-      .addBooleanOption(o => o.setName('disable').setDescription('Desactivar el sistema'))),
+      .addBooleanOption(o => o.setName('disable').setDescription('Desactivar el sistema')))
+    // antiraid
+    .addSubcommand(s => s.setName('antiraid').setDescription('Configurar sistema anti-raid')
+      .addBooleanOption(o => o.setName('enabled').setDescription('Activar o desactivar').setRequired(true))
+      .addIntegerOption(o => o.setName('threshold').setDescription('Joins para activar (default: 10)').setMinValue(3).setMaxValue(50))
+      .addIntegerOption(o => o.setName('window').setDescription('Ventana en segundos (default: 30)').setMinValue(5).setMaxValue(120))
+      .addStringOption(o => o.setName('action').setDescription('Acción al detectar raid').addChoices({ name: 'Lockdown', value: 'lockdown' }, { name: 'Kick nuevos', value: 'kick' }, { name: 'Timeout nuevos', value: 'timeout' }))
+      .addIntegerOption(o => o.setName('min_age').setDescription('Edad mínima de cuenta en días (0 = desactivado)').setMinValue(0).setMaxValue(365))
+      .addIntegerOption(o => o.setName('unlock_after').setDescription('Auto-unlock en minutos (default: 10)').setMinValue(1).setMaxValue(60))),
 
   async execute(interaction) {
     const sub = interaction.options.getSubcommand();
@@ -189,6 +197,46 @@ module.exports = {
         const roles = cp.roles.length > 0 ? cp.roles.map(id => `<@&${id}>`).join(', ') : 'Ninguno';
         return interaction.reply({ embeds: [new EmbedBuilder().setTitle(`Permisos: /${commandName}`).addFields({ name: 'Usuarios', value: users }, { name: 'Roles', value: roles }).setColor(0x5865F2).setTimestamp()], ephemeral: true });
       }
+    }
+
+    // ── ANTIRAID ─────────────────────────────────────────────────────────────
+    if (sub === 'antiraid') {
+      const enabled     = interaction.options.getBoolean('enabled');
+      const threshold   = interaction.options.getInteger('threshold');
+      const window      = interaction.options.getInteger('window');
+      const action      = interaction.options.getString('action');
+      const minAge      = interaction.options.getInteger('min_age');
+      const unlockAfter = interaction.options.getInteger('unlock_after');
+
+      if (!config.antiRaid) config.antiRaid = {};
+      if (!config.antiRaid[interaction.guild.id]) config.antiRaid[interaction.guild.id] = {};
+      const ar = config.antiRaid[interaction.guild.id];
+
+      ar.enabled = enabled;
+      if (threshold   !== null) ar.threshold   = threshold;
+      if (window      !== null) ar.windowMs     = window * 1000;
+      if (action      !== null) ar.action       = action;
+      if (minAge      !== null) ar.minAccountAge = minAge;
+      if (unlockAfter !== null) ar.unlockAfter  = unlockAfter;
+
+      save();
+
+      const arCfg = config.antiRaid[interaction.guild.id];
+      return interaction.reply({
+        embeds: [new EmbedBuilder()
+          .setTitle(L('⚙️ Anti-Raid Configurado', '⚙️ Anti-Raid Configured'))
+          .setColor(enabled ? 0x57F287 : 0xED4245)
+          .addFields(
+            { name: L('Estado', 'Status'), value: enabled ? '✅ Activo' : '❌ Inactivo', inline: true },
+            { name: L('Umbral', 'Threshold'), value: `${arCfg.threshold ?? 10} joins`, inline: true },
+            { name: L('Ventana', 'Window'), value: `${(arCfg.windowMs ?? 30000) / 1000}s`, inline: true },
+            { name: L('Acción', 'Action'), value: arCfg.action ?? 'lockdown', inline: true },
+            { name: L('Edad mín. cuenta', 'Min account age'), value: `${arCfg.minAccountAge ?? 7} días`, inline: true },
+            { name: L('Auto-unlock', 'Auto-unlock'), value: `${arCfg.unlockAfter ?? 10} min`, inline: true },
+          )
+          .setTimestamp()],
+        ephemeral: true
+      });
     }
 
     // ── JOINCHECK ────────────────────────────────────────────────────────────
