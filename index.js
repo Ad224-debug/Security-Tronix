@@ -22,65 +22,65 @@ const messageCache = new Map();
 
 client.commands = new Collection();
 
+// ─── CONFIG CACHE ────────────────────────────────────────────────────────────
+// Lee config.json una vez y lo mantiene en memoria. Se invalida cuando se escribe.
+let _configCache = null;
+let _configMtime = 0;
+const CONFIG_PATH = path.join(__dirname, 'config.json');
+
+function getConfig() {
+  try {
+    if (fs.existsSync(CONFIG_PATH)) {
+      const mtime = fs.statSync(CONFIG_PATH).mtimeMs;
+      if (!_configCache || mtime !== _configMtime) {
+        _configCache = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
+        _configMtime = mtime;
+      }
+    }
+  } catch { /* usa cache anterior si falla */ }
+  return _configCache || {};
+}
+
+// Cache de languages.json (no cambia en runtime)
+let _langCache = null;
+function getLangData() {
+  if (!_langCache) {
+    const p = path.join(__dirname, 'languages.json');
+    _langCache = fs.existsSync(p) ? JSON.parse(fs.readFileSync(p, 'utf8')) : {};
+  }
+  return _langCache;
+}
+
 // Cargar configuración de prefijos
 function getPrefix(guildId) {
-  const configPath = path.join(__dirname, 'config.json');
-  if (fs.existsSync(configPath)) {
-    const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-    return config.prefixes?.[guildId] || '!';
-  }
-  return '!';
+  return getConfig().prefixes?.[guildId] || '!';
 }
 
 // Cargar idioma del servidor
 function getLanguage(guildId) {
-  const configPath = path.join(__dirname, 'config.json');
-  if (fs.existsSync(configPath)) {
-    const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-    return config.languages?.[guildId] || 'es';
-  }
-  return 'es';
+  return getConfig().languages?.[guildId] || 'es';
 }
 
 // Obtener texto traducido
 function getText(guildId, key) {
   const lang = getLanguage(guildId);
-  const langPath = path.join(__dirname, 'languages.json');
-  if (fs.existsSync(langPath)) {
-    const languages = JSON.parse(fs.readFileSync(langPath, 'utf8'));
-    return languages[lang]?.[key] || languages['es']?.[key] || key;
-  }
-  return key;
+  const languages = getLangData();
+  return languages[lang]?.[key] || languages['es']?.[key] || key;
 }
 
 // Obtener canal de logs
 function getLogChannel(guildId) {
-  const configPath = path.join(__dirname, 'config.json');
-  if (fs.existsSync(configPath)) {
-    const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-    return config.logChannels?.[guildId];
-  }
-  return null;
+  return getConfig().logChannels?.[guildId] || null;
 }
 
 // Obtener canal de logs de mensajes eliminados
 function getDeleteLogChannel(guildId) {
-  const configPath = path.join(__dirname, 'config.json');
-  if (fs.existsSync(configPath)) {
-    const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-    return config.deleteLogChannels?.[guildId];
-  }
-  return null;
+  return getConfig().deleteLogChannels?.[guildId] || null;
 }
 
 // Obtener canal de notificaciones de boost
 function getBoostChannel(guildId) {
-  const configPath = path.join(__dirname, 'config.json');
-  if (fs.existsSync(configPath)) {
-    const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-    return config.boostChannels?.[guildId];
-  }
-  return null;
+  return getConfig().boostChannels?.[guildId] || null;
 }
 
 // Verificar permisos personalizados de comando

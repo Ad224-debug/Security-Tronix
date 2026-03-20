@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -85,16 +85,16 @@ module.exports = {
         
         await miembro.roles.add(rol);
         await interaction.reply({
-          embeds: [{
-            title: getText('role_assigned'),
-            description: `Gave role ${rol} to ${usuario}`,
-            fields: [
-              { name: getText('moderator'), value: `${interaction.user}` },
-              { name: 'Role position', value: `${rol.position}`, inline: true },
-            ],
-            color: 0x57F287,
-            timestamp: new Date(),
-          }]
+          embeds: [new EmbedBuilder()
+            .setTitle(getText('role_assigned'))
+            .setDescription(`Gave role ${rol} to ${usuario}`)
+            .addFields(
+              { name: getText('moderator'), value: `${interaction.user}`, inline: true },
+              { name: 'Role position', value: `${rol.position}`, inline: true }
+            )
+            .setColor(0x57F287)
+            .setTimestamp()
+          ]
         });
       } else {
         if (!miembro.roles.cache.has(rol.id)) {
@@ -106,15 +106,13 @@ module.exports = {
         
         await miembro.roles.remove(rol);
         await interaction.reply({
-          embeds: [{
-            title: getText('role_removed'),
-            description: `Removed role ${rol} from ${usuario}`,
-            fields: [
-              { name: getText('moderator'), value: `${interaction.user}` },
-            ],
-            color: 0xED4245,
-            timestamp: new Date(),
-          }]
+          embeds: [new EmbedBuilder()
+            .setTitle(getText('role_removed'))
+            .setDescription(`Removed role ${rol} from ${usuario}`)
+            .addFields({ name: getText('moderator'), value: `${interaction.user}`, inline: true })
+            .setColor(0xED4245)
+            .setTimestamp()
+          ]
         });
       }
     } catch (error) {

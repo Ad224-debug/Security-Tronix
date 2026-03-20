@@ -38,8 +38,6 @@ module.exports = {
     await interaction.deferReply({ ephemeral: true });
 
     try {
-      const oldAvatar = interaction.client.user.displayAvatarURL({ size: 256 });
-
       // Cambiar el avatar del bot
       await interaction.client.user.setAvatar(attachment.url);
 

@@ -1,9 +1,6 @@
 const fs = require('fs');
 const path = require('path');
 
-// Tracking de strikes por usuario
-const userStrikes = new Map();
-
 function getRB3Config(guildId) {
   const rb3Path = path.join(__dirname, 'data/rb3-config.json');
   
@@ -76,7 +73,7 @@ function cleanOldStrikes(guildId, userId, resetDays) {
   fs.writeFileSync(strikesPath, JSON.stringify(strikes, null, 2));
 }
 
-async function applyRB3Action(guild, userId, strikeCount, reason, client) {
+async function applyRB3Action(guild, userId, strikeCount, reason) {
   const config = getRB3Config(guild.id);
   if (!config || !config.enabled) return null;
 
@@ -246,7 +243,7 @@ async function handleRB3Strike(guild, userId, reason, client) {
   const strikeCount = addStrike(guild.id, userId, reason);
 
   // Aplicar acción
-  return await applyRB3Action(guild, userId, strikeCount, reason, client);
+  return await applyRB3Action(guild, userId, strikeCount, reason);
 }
 
 module.exports = { handleRB3Strike, getUserStrikes, getRB3Config };

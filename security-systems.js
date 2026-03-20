@@ -5,8 +5,6 @@
 
 const { EmbedBuilder } = require('discord.js');
 const https = require('https');
-const path = require('path');
-const fs = require('fs');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 1. ANTI-SPAM — Ventana deslizante por usuario/guild

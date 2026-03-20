@@ -2,18 +2,16 @@ const fs = require('fs');
 const path = require('path');
 const { handleRB3Strike } = require('./rb3-system');
 
-// Tracking de spam por usuario
-const userMessageTracking = new Map();
+// Cache de config de automod por guild (se invalida por mtime)
+const _automodCache = new Map(); // guildId → { config, mtime }
+const AUTOMOD_PATH = path.join(__dirname, 'data/automod.json');
 
-// Lista de palabras/términos NSFW (puedes expandir esta lista)
+// Lista de palabras/términos NSFW
 const nsfwKeywords = [
-  // Términos explícitos en español
   'porno', 'porn', 'xxx', 'sexo', 'sex', 'desnudo', 'nude', 'nudes',
   'pene', 'vagina', 'tetas', 'culo', 'coño', 'verga', 'pija', 'concha',
   'dick', 'pussy', 'cock', 'boobs', 'ass', 'fuck', 'shit',
-  // Links comunes de contenido adulto
   'onlyfans', 'pornhub', 'xvideos', 'xnxx', 'redtube',
-  // Términos de solicitud
   'pack', 'nopor', 'cp', 'gore'
 ];
 
@@ -23,14 +21,20 @@ function containsNSFW(text) {
 }
 
 function getAutomodConfig(guildId) {
-  const automodPath = path.join(__dirname, 'data/automod.json');
-  
-  if (!fs.existsSync(automodPath)) {
-    return null;
-  }
-
-  const automod = JSON.parse(fs.readFileSync(automodPath, 'utf8'));
-  return automod[guildId] || null;
+  try {
+    if (!fs.existsSync(AUTOMOD_PATH)) return null;
+    const mtime = fs.statSync(AUTOMOD_PATH).mtimeMs;
+    const cached = _automodCache.get(guildId);
+    if (!cached || cached.mtime !== mtime) {
+      const all = JSON.parse(fs.readFileSync(AUTOMOD_PATH, 'utf8'));
+      // Actualizar cache para todos los guilds del archivo
+      for (const [id, cfg] of Object.entries(all)) {
+        _automodCache.set(id, { config: cfg, mtime });
+      }
+      return all[guildId] || null;
+    }
+    return cached.config;
+  } catch { return null; }
 }
 
 async function checkAutomod(message) {
@@ -52,27 +56,8 @@ async function checkAutomod(message) {
     isNSFW = true;
   }
 
-  // 1. SPAM DETECTION
-  if (config.spam?.enabled) {
-    const userId = message.author.id;
-    const now = Date.now();
-    
-    if (!userMessageTracking.has(userId)) {
-      userMessageTracking.set(userId, []);
-    }
-
-    const userMessages = userMessageTracking.get(userId);
-    userMessages.push(now);
-
-    // Limpiar mensajes antiguos
-    const timeframe = config.spam.seconds * 1000;
-    const recentMessages = userMessages.filter(timestamp => now - timestamp < timeframe);
-    userMessageTracking.set(userId, recentMessages);
-
-    if (recentMessages.length > config.spam.messages) {
-      violations.push('spam');
-    }
-  }
+  // 1. SPAM DETECTION — manejado por security-systems.js (ventana deslizante + duplicados)
+  // No duplicar lógica aquí
 
   // 2. MASS MENTIONS
   if (config.mentions?.enabled) {
@@ -175,7 +160,8 @@ async function checkAutomod(message) {
       // Log en el canal de logs si existe
       const configPath = path.join(__dirname, 'config.json');
       if (fs.existsSync(configPath)) {
-        const serverConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+        let serverConfig;
+        try { serverConfig = JSON.parse(fs.readFileSync(configPath, 'utf8')); } catch { serverConfig = {}; }
         const logChannelId = serverConfig.logChannels?.[message.guild.id];
         
         if (logChannelId) {
