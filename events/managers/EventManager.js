@@ -182,6 +182,11 @@ class EventManager {
 
     this.saveEvents();
 
+    // Crear template de recurrencia si aplica
+    if (event.recurrence) {
+      this.createRecurrenceTemplate(event);
+    }
+
     return event;
   }
 
@@ -318,14 +323,13 @@ class EventManager {
 
     this.cache.forEach((event, id) => {
       try {
-        // Scheduled -> Ongoing
         if (event.status === 'scheduled' && event.startTime <= now) {
           this.transitionEventStatus(id, 'ongoing');
           updated++;
-        }
-        // Ongoing -> Completed
-        else if (event.status === 'ongoing' && event.endTime && event.endTime <= now) {
+        } else if (event.status === 'ongoing' && event.endTime && event.endTime <= now) {
           this.transitionEventStatus(id, 'completed');
+          // Notify stats tracker if available
+          if (this.onEventCompleted) this.onEventCompleted(event);
           updated++;
         }
       } catch (error) {
@@ -333,11 +337,182 @@ class EventManager {
       }
     });
 
-    if (updated > 0) {
-      console.log(`✅ Updated ${updated} event statuses`);
+    if (updated > 0) console.log(`✅ Updated ${updated} event statuses`);
+    return updated;
+  }
+
+  // ── Recurring events ──────────────────────────────────────────────────────
+
+  loadRecurrenceTemplates() {
+    try {
+      const data = JSON.parse(fs.readFileSync(this.eventsPath, 'utf8'));
+      return data.recurrenceTemplates || {};
+    } catch {
+      return {};
+    }
+  }
+
+  saveRecurrenceTemplate(template) {
+    try {
+      let allData = { events: {}, recurrenceTemplates: {} };
+      if (fs.existsSync(this.eventsPath)) {
+        allData = JSON.parse(fs.readFileSync(this.eventsPath, 'utf8'));
+      }
+      allData.recurrenceTemplates[template.id] = template;
+      fs.writeFileSync(this.eventsPath, JSON.stringify(allData, null, 2));
+    } catch (error) {
+      console.error('Error saving recurrence template:', error);
+    }
+  }
+
+  deleteRecurrenceTemplate(templateId) {
+    try {
+      let allData = { events: {}, recurrenceTemplates: {} };
+      if (fs.existsSync(this.eventsPath)) {
+        allData = JSON.parse(fs.readFileSync(this.eventsPath, 'utf8'));
+      }
+      delete allData.recurrenceTemplates[templateId];
+      fs.writeFileSync(this.eventsPath, JSON.stringify(allData, null, 2));
+    } catch (error) {
+      console.error('Error deleting recurrence template:', error);
+    }
+  }
+
+  calculateNextOccurrence(currentDate, pattern) {
+    const next = new Date(currentDate);
+
+    switch (pattern.type) {
+      case 'daily':
+        next.setDate(next.getDate() + pattern.interval);
+        break;
+      case 'weekly':
+        next.setDate(next.getDate() + 7 * pattern.interval);
+        if (pattern.daysOfWeek && pattern.daysOfWeek.length > 0) {
+          let attempts = 0;
+          while (!pattern.daysOfWeek.includes(next.getDay()) && attempts < 7) {
+            next.setDate(next.getDate() + 1);
+            attempts++;
+          }
+        }
+        break;
+      case 'monthly':
+        next.setMonth(next.getMonth() + pattern.interval);
+        break;
     }
 
-    return updated;
+    return next.getTime();
+  }
+
+  async generateRecurringEvents() {
+    const now = Date.now();
+    const templates = this.loadRecurrenceTemplates();
+    let generated = 0;
+
+    for (const template of Object.values(templates)) {
+      if (template.nextOccurrence > now) continue;
+
+      const pattern = template.baseEventData.recurrence;
+
+      // Check endDate
+      if (pattern.endDate && template.nextOccurrence > new Date(pattern.endDate).getTime()) {
+        this.deleteRecurrenceTemplate(template.id);
+        continue;
+      }
+
+      // Calculate duration
+      const duration = template.baseEventData.endTime
+        ? new Date(template.baseEventData.endTime).getTime() - new Date(template.baseEventData.startTime).getTime()
+        : null;
+
+      const newStartTime = template.nextOccurrence;
+      const eventData = {
+        ...template.baseEventData,
+        startTime: newStartTime,
+        endTime: duration ? newStartTime + duration : undefined
+      };
+
+      try {
+        this.createEvent(eventData);
+        generated++;
+      } catch (error) {
+        console.error('Error generating recurring event:', error);
+      }
+
+      // Update template's next occurrence
+      template.nextOccurrence = this.calculateNextOccurrence(template.nextOccurrence, pattern);
+      template.lastGenerated = now;
+      this.saveRecurrenceTemplate(template);
+    }
+
+    if (generated > 0) console.log(`✅ Generated ${generated} recurring events`);
+    return generated;
+  }
+
+  createRecurrenceTemplate(event) {
+    const template = {
+      id: uuidv4(),
+      guildId: event.guildId,
+      baseEventData: {
+        title: event.title,
+        description: event.description,
+        startTime: event.startTime,
+        endTime: event.endTime,
+        location: event.location,
+        maxAttendees: event.maxAttendees,
+        roleId: event.roleId,
+        imageUrl: event.imageUrl,
+        recurrence: event.recurrence,
+        guildId: event.guildId,
+        channelId: event.channelId,
+        creatorId: event.creatorId,
+        creatorUsername: event.creatorUsername
+      },
+      nextOccurrence: this.calculateNextOccurrence(event.startTime, event.recurrence),
+      lastGenerated: Date.now()
+    };
+
+    this.saveRecurrenceTemplate(template);
+    return template;
+  }
+
+  // ── Cleanup ───────────────────────────────────────────────────────────────
+
+  cleanupOldEvents() {
+    const cleanup = this.config.cleanup || {};
+    const completedRetention = (cleanup.completedEventsRetentionDays || 30) * 24 * 60 * 60 * 1000;
+    const cancelledRetention = (cleanup.cancelledEventsRetentionDays || 7) * 24 * 60 * 60 * 1000;
+    const now = Date.now();
+    let removed = 0;
+
+    try {
+      let allData = { events: {}, recurrenceTemplates: {} };
+      if (fs.existsSync(this.eventsPath)) {
+        allData = JSON.parse(fs.readFileSync(this.eventsPath, 'utf8'));
+      }
+
+      for (const [id, event] of Object.entries(allData.events)) {
+        const age = now - (event.updatedAt || event.createdAt || 0);
+        if (
+          (event.status === 'completed' && age > completedRetention) ||
+          (event.status === 'cancelled' && age > cancelledRetention)
+        ) {
+          delete allData.events[id];
+          this.cache.delete(id);
+          const guildSet = this.guildIndex.get(event.guildId);
+          if (guildSet) guildSet.delete(id);
+          removed++;
+        }
+      }
+
+      if (removed > 0) {
+        fs.writeFileSync(this.eventsPath, JSON.stringify(allData, null, 2));
+        console.log(`✅ Cleaned up ${removed} old events`);
+      }
+    } catch (error) {
+      console.error('Error cleaning up old events:', error);
+    }
+
+    return removed;
   }
 }
 

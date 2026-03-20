@@ -156,6 +156,27 @@ class StatisticsTracker {
       .slice(0, limit);
   }
 
+  getEventStats(eventId) {
+    const event = this.eventManager.getEvent(eventId);
+    if (!event) return null;
+
+    const totalRSVPs = event.attendees.length;
+    const attendedCount = event.attendees.filter(a => a.status === 'attending').length;
+    const waitlistCount = event.attendees.filter(a => a.status === 'waitlist').length;
+    const attendanceRate = totalRSVPs > 0 ? Math.round((attendedCount / totalRSVPs) * 100) : 0;
+
+    return {
+      eventId,
+      title: event.title,
+      totalRSVPs,
+      attendedCount,
+      waitlistCount,
+      noShowCount: totalRSVPs - attendedCount - waitlistCount,
+      attendanceRate,
+      status: event.status
+    };
+  }
+
   cleanupOldStats() {
     const cutoff = Date.now() - (90 * 24 * 60 * 60 * 1000); // 90 días
     

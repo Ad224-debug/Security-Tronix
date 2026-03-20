@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, PermissionFlagsBits, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -36,7 +36,19 @@ module.exports = {
             .setDescription('Role to assign to attendees'))
         .addStringOption(option =>
           option.setName('image')
-            .setDescription('Image URL for the event')))
+            .setDescription('Image URL for the event'))
+        .addStringOption(option =>
+          option.setName('recurrence')
+            .setDescription('Recurrence pattern')
+            .addChoices(
+              { name: 'Daily', value: 'daily' },
+              { name: 'Weekly', value: 'weekly' },
+              { name: 'Monthly', value: 'monthly' }
+            ))
+        .addIntegerOption(option =>
+          option.setName('recurrence_interval')
+            .setDescription('Recurrence interval (e.g. every 2 weeks)')
+            .setMinValue(1)))
     .addSubcommand(subcommand =>
       subcommand
         .setName('edit')
@@ -153,6 +165,8 @@ async function handleCreate(interaction, eventManager, reminderScheduler) {
   const maxAttendees = interaction.options.getInteger('max_attendees');
   const role = interaction.options.getRole('role');
   const imageUrl = interaction.options.getString('image');
+  const recurrenceType = interaction.options.getString('recurrence');
+  const recurrenceInterval = interaction.options.getInteger('recurrence_interval') || 1;
 
   // Parsear fechas
   const startTime = parseDateTime(startStr);
@@ -184,6 +198,7 @@ async function handleCreate(interaction, eventManager, reminderScheduler) {
     maxAttendees,
     roleId: role?.id,
     imageUrl,
+    recurrence: recurrenceType ? { type: recurrenceType, interval: recurrenceInterval } : undefined,
     guildId: interaction.guild.id,
     channelId: interaction.channel.id,
     creatorId: interaction.user.id,

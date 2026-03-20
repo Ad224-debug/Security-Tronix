@@ -100,6 +100,11 @@ class RSVPManager {
     };
   }
 
+  // Alias para compatibilidad con index.js
+  moveFromWaitlist(eventId) {
+    return this.promoteFromWaitlist(eventId);
+  }
+
   promoteFromWaitlist(eventId) {
     const event = this.eventManager.getEvent(eventId);
     if (!event) return null;
