@@ -8,8 +8,55 @@ class EventManager {
     this.configPath = path.join(__dirname, '../../data/event-config.json');
     this.cache = new Map(); // Cache para eventos activos (próximos 7 días)
     this.guildIndex = new Map(); // Índice guildId -> eventIds
+    this.userDailyCreations = new Map(); // userId-date -> count (rate limiting)
     this.config = this.loadConfig();
     this.loadEvents();
+  }
+
+  // ── Sanitización de inputs ────────────────────────────────────────────────
+
+  sanitizeText(text) {
+    if (!text) return text;
+    // Filtrar mass mentions
+    return text
+      .replace(/@everyone/gi, '@\u200beveryone')
+      .replace(/@here/gi, '@\u200bhere')
+      .replace(/[<>]/g, c => c === '<' ? '&lt;' : '&gt;');
+  }
+
+  validateImageUrl(url) {
+    if (!url) return true;
+    const allowedDomains = [
+      'cdn.discordapp.com', 'media.discordapp.net', 'i.imgur.com',
+      'imgur.com', 'i.ibb.co', 'images.unsplash.com', 'pbs.twimg.com',
+      'cdn.pixabay.com', 'upload.wikimedia.org'
+    ];
+    try {
+      const parsed = new URL(url);
+      if (parsed.protocol !== 'https:') return false;
+      return allowedDomains.some(d => parsed.hostname === d || parsed.hostname.endsWith('.' + d));
+    } catch {
+      return false;
+    }
+  }
+
+  // ── Rate limiting por usuario ─────────────────────────────────────────────
+
+  checkUserDailyLimit(userId) {
+    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    const key = `${userId}-${today}`;
+    const count = this.userDailyCreations.get(key) || 0;
+    const limit = this.config.limits.maxEventsPerUserPerDay || 5;
+    if (count >= limit) {
+      throw new Error(`Has alcanzado el límite de ${limit} eventos por día`);
+    }
+    return key;
+  }
+
+  incrementUserDailyCount(userId) {
+    const today = new Date().toISOString().slice(0, 10);
+    const key = `${userId}-${today}`;
+    this.userDailyCreations.set(key, (this.userDailyCreations.get(key) || 0) + 1);
   }
 
   loadConfig() {
@@ -111,11 +158,13 @@ class EventManager {
       errors.push('La descripción no puede exceder 2000 caracteres');
     }
 
-    // Validar fecha de inicio
-    const now = Date.now();
-    const minStartTime = now + (5 * 60 * 1000); // 5 minutos en el futuro
-    if (data.startTime < minStartTime) {
-      errors.push('La fecha de inicio debe ser al menos 5 minutos en el futuro');
+    // Validar fecha de inicio (solo si se provee, para no romper updates parciales)
+    if (data.startTime !== undefined) {
+      const now = Date.now();
+      const minStartTime = now + (5 * 60 * 1000);
+      if (data.startTime < minStartTime) {
+        errors.push('La fecha de inicio debe ser al menos 5 minutos en el futuro');
+      }
     }
 
     // Validar fecha de fin
@@ -128,6 +177,11 @@ class EventManager {
       if (!Number.isInteger(data.maxAttendees) || data.maxAttendees <= 0) {
         errors.push('El máximo de asistentes debe ser un número entero positivo');
       }
+    }
+
+    // Validar URL de imagen (solo HTTPS y dominios permitidos)
+    if (data.imageUrl && !this.validateImageUrl(data.imageUrl)) {
+      errors.push('La URL de imagen debe usar HTTPS y ser de un dominio permitido (imgur, Discord CDN, etc.)');
     }
 
     // Validar patrón de recurrencia
@@ -149,13 +203,21 @@ class EventManager {
   }
 
   createEvent(eventData) {
+    // Sanitizar inputs
+    if (eventData.title) eventData.title = this.sanitizeText(eventData.title);
+    if (eventData.description) eventData.description = this.sanitizeText(eventData.description);
+    if (eventData.location) eventData.location = this.sanitizeText(eventData.location);
+
     // Validar datos
     const errors = this.validateEventData(eventData);
     if (errors.length > 0) {
       throw new Error(errors.join(', '));
     }
 
-    // Verificar límites
+    // Verificar rate limit diario del usuario
+    const rateLimitKey = this.checkUserDailyLimit(eventData.creatorId);
+
+    // Verificar límite de eventos activos del guild
     const guildEvents = this.getGuildEvents(eventData.guildId, { status: 'scheduled' });
     if (guildEvents.length >= this.config.limits.maxEventsPerGuild) {
       throw new Error(`El servidor ha alcanzado el límite de ${this.config.limits.maxEventsPerGuild} eventos activos`);
@@ -186,6 +248,9 @@ class EventManager {
     if (event.recurrence) {
       this.createRecurrenceTemplate(event);
     }
+
+    // Registrar creación para rate limiting
+    this.incrementUserDailyCount(eventData.creatorId);
 
     return event;
   }

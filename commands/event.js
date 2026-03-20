@@ -224,6 +224,21 @@ async function handleCreate(interaction, eventManager, reminderScheduler) {
   // Programar recordatorios
   reminderScheduler.scheduleReminders(event);
 
+  // Log de auditoría
+  try {
+    const { EmbedBuilder } = require('discord.js');
+    const logEmbed = new EmbedBuilder()
+      .setTitle('📅 Evento Creado')
+      .setColor(0x57F287)
+      .addFields(
+        { name: 'Evento', value: `${event.title} (\`${event.id}\`)`, inline: false },
+        { name: 'Creador', value: `<@${interaction.user.id}>`, inline: true },
+        { name: 'Inicio', value: `<t:${Math.floor(event.startTime / 1000)}:F>`, inline: true }
+      )
+      .setTimestamp();
+    await interaction.client.sendLog(interaction.guild, logEmbed);
+  } catch {}
+
   await interaction.reply({
     content: `✅ Evento creado exitosamente! ID: \`${event.id}\``,
     ephemeral: true
@@ -280,6 +295,22 @@ async function handleEdit(interaction, eventManager, reminderScheduler) {
   const { updateEventEmbed } = require('../events/utils/embedBuilder');
   await updateEventEmbed(interaction.client, eventManager.getEvent(eventId));
 
+  // Log de auditoría
+  try {
+    const { EmbedBuilder } = require('discord.js');
+    const changedFields = Object.keys(updates).join(', ');
+    const logEmbed = new EmbedBuilder()
+      .setTitle('✏️ Evento Editado')
+      .setColor(0xFEE75C)
+      .addFields(
+        { name: 'Evento', value: `${event.title} (\`${eventId}\`)`, inline: false },
+        { name: 'Editor', value: `<@${interaction.user.id}>`, inline: true },
+        { name: 'Campos modificados', value: changedFields || 'ninguno', inline: true }
+      )
+      .setTimestamp();
+    await interaction.client.sendLog(interaction.guild, logEmbed);
+  } catch {}
+
   await interaction.reply({
     content: '✅ Evento actualizado exitosamente',
     ephemeral: true
@@ -319,6 +350,20 @@ async function handleDelete(interaction, eventManager, reminderScheduler, roleMa
   // Actualizar embed
   const { updateEventEmbed } = require('../events/utils/embedBuilder');
   await updateEventEmbed(interaction.client, eventManager.getEvent(eventId));
+
+  // Log de auditoría
+  try {
+    const { EmbedBuilder } = require('discord.js');
+    const logEmbed = new EmbedBuilder()
+      .setTitle('🗑️ Evento Eliminado')
+      .setColor(0xED4245)
+      .addFields(
+        { name: 'Evento', value: `${event.title} (\`${eventId}\`)`, inline: false },
+        { name: 'Eliminado por', value: `<@${interaction.user.id}>`, inline: true }
+      )
+      .setTimestamp();
+    await interaction.client.sendLog(interaction.guild, logEmbed);
+  } catch {}
 
   await interaction.reply({
     content: '✅ Evento cancelado exitosamente',
