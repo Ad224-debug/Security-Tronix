@@ -1,6 +1,7 @@
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
+const cache = require('../cache');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -32,31 +33,35 @@ module.exports = {
       if (parts[0] === 10 || parts[0] === 127 || (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) || (parts[0] === 192 && parts[1] === 168))
         return interaction.editReply({ content: '❌ No se pueden consultar IPs privadas.' });
       try {
-        // ip-api.com (sin key, gratis)
-        const geoRes = await fetch(`http://ip-api.com/json/${ip}?fields=status,message,country,countryCode,regionName,city,timezone,isp,org,as,proxy,hosting,query`);
-        const geo = await geoRes.json();
-        if (geo.status === 'fail') return interaction.editReply({ content: `❌ ${geo.message}` });
+        const cacheKey = `ip:${ip}`;
+        let result = cache.get(cacheKey);
+        const fromCache = !!result;
 
-        // AbuseIPDB (requiere key)
-        let abuseScore = null;
-        let abuseReports = null;
-        let abuseLastReport = null;
-        const abuseKey = process.env.ABUSEIPDB_KEY;
-        if (abuseKey) {
-          try {
-            const abuseRes = await fetch(`https://api.abuseipdb.com/api/v2/check?ipAddress=${ip}&maxAgeInDays=90&verbose`, {
-              headers: { Key: abuseKey, Accept: 'application/json' }
-            });
-            const abuseData = await abuseRes.json();
-            if (abuseData.data) {
-              abuseScore = abuseData.data.abuseConfidenceScore;
-              abuseReports = abuseData.data.totalReports;
-              abuseLastReport = abuseData.data.lastReportedAt;
-            }
-          } catch { /* silently skip */ }
+        if (!result) {
+          const geoRes = await fetch(`http://ip-api.com/json/${ip}?fields=status,message,country,countryCode,regionName,city,timezone,isp,org,as,proxy,hosting,query`);
+          const geo = await geoRes.json();
+          if (geo.status === 'fail') return interaction.editReply({ content: `❌ ${geo.message}` });
+
+          let abuseScore = null, abuseReports = null, abuseLastReport = null;
+          const abuseKey = process.env.ABUSEIPDB_KEY;
+          if (abuseKey) {
+            try {
+              const abuseRes = await fetch(`https://api.abuseipdb.com/api/v2/check?ipAddress=${ip}&maxAgeInDays=90`, {
+                headers: { Key: abuseKey, Accept: 'application/json' }
+              });
+              const abuseData = await abuseRes.json();
+              if (abuseData.data) {
+                abuseScore = abuseData.data.abuseConfidenceScore;
+                abuseReports = abuseData.data.totalReports;
+                abuseLastReport = abuseData.data.lastReportedAt;
+              }
+            } catch { /* skip */ }
+          }
+          result = { geo, abuseScore, abuseReports, abuseLastReport, hasAbuseKey: !!abuseKey };
+          cache.set(cacheKey, result, 6 * 60 * 60 * 1000);
         }
 
-        // Calcular riesgo combinado
+        const { geo, abuseScore, abuseReports, abuseLastReport, hasAbuseKey } = result;
         const isRisky = geo.proxy || geo.hosting || (abuseScore !== null && abuseScore >= 25);
         const color = abuseScore >= 75 ? 0xED4245 : isRisky ? 0xFFA500 : 0x57F287;
         const riskLabel = abuseScore >= 75 ? '🔴 ALTO' : isRisky ? '🟡 MEDIO' : '🟢 BAJO';
@@ -80,11 +85,11 @@ module.exports = {
             { name: '📋 Reportes (90d)', value: `${abuseReports}`, inline: true },
             { name: '🕒 Último reporte', value: abuseLastReport ? `<t:${Math.floor(new Date(abuseLastReport).getTime() / 1000)}:R>` : 'Nunca', inline: true }
           );
-        } else if (!abuseKey) {
+        } else if (!hasAbuseKey) {
           embed.addFields({ name: '🛡️ AbuseIPDB', value: '⚠️ Sin API key (`ABUSEIPDB_KEY`)', inline: false });
         }
 
-        embed.setFooter({ text: 'ip-api.com • AbuseIPDB' }).setTimestamp();
+        embed.setFooter({ text: `ip-api.com • AbuseIPDB${fromCache ? ' • 📦 Caché' : ''}` }).setTimestamp();
         return interaction.editReply({ embeds: [embed] });
       } catch (err) {
         console.error('[ipinfo]', err);
@@ -100,65 +105,81 @@ module.exports = {
       let domain;
       try { domain = new URL(url).hostname; } catch { return interaction.editReply({ content: '❌ URL inválida.' }); }
       try {
-        const vtKey = process.env.VIRUSTOTAL_KEY;
-        const threats = [];
-        let isMalicious = false;
-        let vtStats = null;
+        const cacheKey = `url:${url}`;
+        let cached = cache.get(cacheKey);
+        const fromCache = !!cached;
 
-        // ── URLhaus (sin key) ──────────────────────────────────────────────
-        const urlhausRes = await fetch('https://urlhaus-api.abuse.ch/v1/url/', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: `url=${encodeURIComponent(url)}`
-        }).then(r => r.json()).catch(() => null);
-        if (urlhausRes?.url_status === 'online') {
-          threats.push('🦠 **URLhaus**: URL de malware activa');
-          isMalicious = true;
-        }
+        let threats = [], isMalicious = false, vtStats = null, phishDetected = false;
 
-        // ── VirusTotal (requiere key) ──────────────────────────────────────
-        if (vtKey) {
+        if (cached) {
+          ({ threats, isMalicious, vtStats, phishDetected } = cached);
+        } else {
+          const vtKey = process.env.VIRUSTOTAL_KEY;
+
+          // ── URLhaus ──────────────────────────────────────────────────────
+          const urlhausRes = await fetch('https://urlhaus-api.abuse.ch/v1/url/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `url=${encodeURIComponent(url)}`
+          }).then(r => r.json()).catch(() => null);
+          if (urlhausRes?.url_status === 'online') {
+            threats.push('🦠 **URLhaus**: URL de malware activa');
+            isMalicious = true;
+          }
+
+          // ── PhishTank (sin key, gratis) ───────────────────────────────────
           try {
-            // Enviar URL para análisis
-            const vtSubmit = await fetch('https://www.virustotal.com/api/v3/urls', {
+            const ptRes = await fetch('https://checkurl.phishtank.com/checkurl/', {
               method: 'POST',
-              headers: { 'x-apikey': vtKey, 'Content-Type': 'application/x-www-form-urlencoded' },
-              body: `url=${encodeURIComponent(url)}`
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'phishtank/TronixSecurity' },
+              body: `url=${encodeURIComponent(Buffer.from(url).toString('base64'))}&format=json&app_key=`
             });
-            const vtSubmitData = await vtSubmit.json();
-            const analysisId = vtSubmitData.data?.id;
+            const ptData = await ptRes.json();
+            if (ptData.results?.in_database && ptData.results?.valid) {
+              threats.push('🎣 **PhishTank**: URL de phishing confirmada');
+              isMalicious = true;
+              phishDetected = true;
+            }
+          } catch { /* skip */ }
 
-            if (analysisId) {
-              // Esperar un momento y obtener resultados
-              await new Promise(r => setTimeout(r, 3000));
-              const vtResult = await fetch(`https://www.virustotal.com/api/v3/analyses/${analysisId}`, {
-                headers: { 'x-apikey': vtKey }
+          // ── VirusTotal ───────────────────────────────────────────────────
+          if (vtKey) {
+            try {
+              const vtSubmit = await fetch('https://www.virustotal.com/api/v3/urls', {
+                method: 'POST',
+                headers: { 'x-apikey': vtKey, 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `url=${encodeURIComponent(url)}`
               });
-              const vtData = await vtResult.json();
-              const stats = vtData.data?.attributes?.stats;
-              if (stats) {
-                vtStats = stats;
-                if (stats.malicious > 0) {
-                  threats.push(`🔴 **VirusTotal**: ${stats.malicious} motor(es) detectaron malware`);
-                  isMalicious = true;
-                } else if (stats.suspicious > 0) {
-                  threats.push(`🟡 **VirusTotal**: ${stats.suspicious} motor(es) lo marcan como sospechoso`);
+              const vtSubmitData = await vtSubmit.json();
+              const analysisId = vtSubmitData.data?.id;
+              if (analysisId) {
+                await new Promise(r => setTimeout(r, 3000));
+                const vtResult = await fetch(`https://www.virustotal.com/api/v3/analyses/${analysisId}`, {
+                  headers: { 'x-apikey': vtKey }
+                });
+                const vtData = await vtResult.json();
+                const stats = vtData.data?.attributes?.stats;
+                if (stats) {
+                  vtStats = stats;
+                  if (stats.malicious > 0) { threats.push(`🔴 **VirusTotal**: ${stats.malicious} motor(es) detectaron malware`); isMalicious = true; }
+                  else if (stats.suspicious > 0) { threats.push(`🟡 **VirusTotal**: ${stats.suspicious} motor(es) sospechoso`); }
                 }
               }
-            }
-          } catch { /* silently skip */ }
-        }
+            } catch { /* skip */ }
+          }
 
-        // ── Patrones heurísticos ───────────────────────────────────────────
-        const suspiciousPatterns = [
-          { pattern: /discord\.gift|discordnitro|free-nitro/i, label: '⚠️ Posible scam de Discord Nitro' },
-          { pattern: /bit\.ly|tinyurl|t\.co/i, label: '⚠️ URL acortada' },
-          { pattern: /\.tk$|\.ml$|\.ga$|\.cf$/i, label: '⚠️ Dominio de alto riesgo' },
-          { pattern: /login.*steam|steam.*login/i, label: '⚠️ Posible phishing de Steam' },
-          { pattern: /free.*robux|robux.*free/i, label: '⚠️ Posible scam de Roblox' }
-        ];
-        for (const { pattern, label } of suspiciousPatterns) {
-          if (pattern.test(url)) threats.push(label);
+          // ── Heurísticas ──────────────────────────────────────────────────
+          const patterns = [
+            { pattern: /discord\.gift|discordnitro|free-nitro/i, label: '⚠️ Posible scam de Discord Nitro' },
+            { pattern: /bit\.ly|tinyurl|t\.co/i, label: '⚠️ URL acortada' },
+            { pattern: /\.tk$|\.ml$|\.ga$|\.cf$/i, label: '⚠️ Dominio de alto riesgo' },
+            { pattern: /login.*steam|steam.*login/i, label: '⚠️ Posible phishing de Steam' },
+            { pattern: /free.*robux|robux.*free/i, label: '⚠️ Posible scam de Roblox' }
+          ];
+          for (const { pattern, label } of patterns) { if (pattern.test(url)) threats.push(label); }
+
+          // Cachear 24h si limpia, 1h si maliciosa (para re-verificar pronto)
+          cache.set(cacheKey, { threats, isMalicious, vtStats, phishDetected }, isMalicious ? 60 * 60 * 1000 : 24 * 60 * 60 * 1000);
         }
 
         const color = isMalicious ? 0xED4245 : threats.length > 0 ? 0xFFA500 : 0x57F287;
@@ -174,18 +195,15 @@ module.exports = {
           );
 
         if (vtStats) {
-          embed.addFields({
-            name: '🧬 VirusTotal (motores)',
-            value: `🔴 Malicioso: **${vtStats.malicious}** | 🟡 Sospechoso: **${vtStats.suspicious}** | ✅ Limpio: **${vtStats.harmless}** | ⬜ Sin datos: **${vtStats.undetected}**`
-          });
-        } else if (!vtKey) {
+          embed.addFields({ name: '🧬 VirusTotal', value: `🔴 Malicioso: **${vtStats.malicious}** | 🟡 Sospechoso: **${vtStats.suspicious}** | ✅ Limpio: **${vtStats.harmless}** | ⬜ Sin datos: **${vtStats.undetected}**` });
+        } else if (!process.env.VIRUSTOTAL_KEY) {
           embed.addFields({ name: '🧬 VirusTotal', value: '⚠️ Sin API key (`VIRUSTOTAL_KEY`)' });
         }
 
         if (threats.length > 0) embed.addFields({ name: '⚠️ Amenazas detectadas', value: threats.join('\n') });
         else embed.addFields({ name: '✅ Sin amenazas', value: 'No se encontraron amenazas conocidas.' });
 
-        embed.setFooter({ text: 'URLhaus • VirusTotal • Análisis heurístico' }).setTimestamp();
+        embed.setFooter({ text: `URLhaus • PhishTank • VirusTotal${fromCache ? ' • 📦 Caché' : ''}` }).setTimestamp();
         return interaction.editReply({ embeds: [embed] });
       } catch (err) {
         console.error('[scanurl]', err);
