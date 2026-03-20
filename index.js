@@ -312,6 +312,9 @@ const { EmbedBuilder } = require('discord.js');
 // Sistema de Auto-Moderación
 const { checkAutomod } = require('./automod-system');
 
+// Sistemas de seguridad adicionales (anti-spam, phishing, alt-detector)
+const { runSecurityChecks, runAltCheck } = require('./security-systems');
+
 // Cachear mensajes para poder recuperarlos cuando se eliminen
 client.on('messageCreate', async (message) => {
   if (!message.guild) return;
@@ -359,6 +362,9 @@ client.on('messageCreate', async (message) => {
   
   // Ejecutar auto-moderación
   await checkAutomod(message);
+
+  // Ejecutar sistemas de seguridad adicionales (anti-spam, phishing)
+  await runSecurityChecks(message, sendLog);
   
   // Guardar información del mensaje en cache
   messageCache.set(message.id, {
@@ -745,6 +751,7 @@ client.on('guildMemberAdd', async (member) => {
   // (si tiene pending:true, se analizará cuando apruebe el formulario en guildMemberUpdate)
   if (!member.pending) {
     await analyzeAndSendReputation(member).catch(err => console.error('[joincheck]', err));
+    await runAltCheck(member, sendLog).catch(err => console.error('[altcheck]', err));
   }
 });
 
@@ -801,6 +808,7 @@ client.on('guildMemberUpdate', async (oldMember, newMember) => {
   // Membership Screening: usuario aprobó el formulario (pending: true → false)
   if (oldMember.pending === true && newMember.pending === false) {
     await analyzeAndSendReputation(newMember).catch(err => console.error('[joincheck screening]', err));
+    await runAltCheck(newMember, sendLog).catch(err => console.error('[altcheck screening]', err));
   }
 
   const addedRoles = newMember.roles.cache.filter(role => !oldMember.roles.cache.has(role.id));
