@@ -1,75 +1,47 @@
-const { PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
 
 module.exports = {
-  data: {
-    name: 'mute',
-    description: 'Mutes a user in this channel',
-    options: [
-      {
-        name: 'user',
-        description: 'The user you want to mute',
-        type: 6, // USER type
-        required: true,
-      },
-      {
-        name: 'reason',
-        description: 'Reason for the mute',
-        type: 3, // STRING type
-        required: false,
-      },
-    ],
-  },
+  data: new SlashCommandBuilder()
+    .setName('mute')
+    .setDescription('Mute a user in this channel')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
+    .addUserOption(o => o.setName('user').setDescription('User to mute').setRequired(true))
+    .addStringOption(o => o.setName('reason').setDescription('Reason for the mute')),
+
   async execute(interaction) {
-    const getText = (key) => interaction.client.getText(interaction.guild.id, key);
-
-    if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
-      return await interaction.reply({
-        content: getText('admin_only'),
-        ephemeral: true
-      });
-    }
-
+    const lang = interaction.client.getLanguage(interaction.guild.id);
+    const L = (es, en) => lang === 'es' ? es : en;
     const usuario = interaction.options.getUser('user');
-    const miembro = interaction.guild.members.cache.get(usuario.id);
-    const razon = interaction.options.getString('reason') || (getText('afk_reason') === '📝 Razón' ? 'No especificada' : 'Not specified');
+    const razon = interaction.options.getString('reason') || L('No especificada', 'Not specified');
 
+    const miembro = await interaction.guild.members.fetch(usuario.id).catch(() => null);
     if (!miembro) {
-      return await interaction.reply({
-        content: '❌ ' + (getText('admin_only').includes('Solo') ? 'No se pudo encontrar ese usuario en el servidor.' : 'Could not find that user on the server.'),
-        ephemeral: true
-      });
+      return interaction.reply({ content: L('❌ No se encontró ese usuario.', '❌ User not found.'), ephemeral: true });
     }
 
     try {
-      await interaction.channel.permissionOverwrites.create(miembro, {
-        SendMessages: false,
-      });
+      // Aplicar overwrite de canal
+      await interaction.channel.permissionOverwrites.create(miembro, { SendMessages: false });
 
-      const mutedRoleId = '1478237207885119672';
-      const mutedRole = interaction.guild.roles.cache.get(mutedRoleId);
-      
-      if (mutedRole) {
-        await miembro.roles.add(mutedRole);
-      }
+      // Buscar rol "Muted" por nombre si existe
+      const mutedRole = interaction.guild.roles.cache.find(r => r.name.toLowerCase() === 'muted');
+      if (mutedRole) await miembro.roles.add(mutedRole).catch(() => {});
 
       await interaction.reply({
         embeds: [{
-          title: getText('user_muted'),
-          description: `${usuario} ${getText('user_muted_desc')}`,
+          title: L('🔇 Usuario Muteado', '🔇 User Muted'),
+          description: L(`${usuario} ha sido muteado en este canal.`, `${usuario} has been muted in this channel.`),
           fields: [
-            { name: getText('afk_reason'), value: razon },
-            { name: getText('moderator'), value: `${interaction.user}` },
+            { name: L('Razón', 'Reason'), value: razon, inline: true },
+            { name: L('Moderador', 'Moderator'), value: `${interaction.user}`, inline: true },
           ],
           color: 0xED4245,
           timestamp: new Date(),
-        }]
+        }],
       });
     } catch (error) {
-      console.error('Error en mutear:', error);
-      await interaction.reply({
-        content: getText('error'),
-        ephemeral: true
-      });
+      console.error('Error en mute:', error);
+      await interaction.reply({ content: '❌ Error al mutear al usuario.', ephemeral: true });
     }
   },
 };

@@ -1,60 +1,38 @@
-const { PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
 
 module.exports = {
-  data: {
-    name: 'warnings',
-    description: 'Shows user warnings',
-    options: [
-      {
-        name: 'user',
-        description: 'User to check warnings',
-        type: 6, // USER type
-        required: true,
-      },
-    ],
-  },
+  data: new SlashCommandBuilder()
+    .setName('warnings')
+    .setDescription('Show warnings for a user')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
+    .addUserOption(o => o.setName('user').setDescription('User to check').setRequired(true)),
+
   async execute(interaction) {
-    const getText = (key) => interaction.client.getText(interaction.guild.id, key);
-
-    if (!interaction.member.permissions.has(PermissionFlagsBits.ModerateMembers)) {
-      return await interaction.reply({
-        content: getText('no_permission'),
-        ephemeral: true
-      });
-    }
-
+    const lang = interaction.client.getLanguage(interaction.guild.id);
+    const L = (es, en) => lang === 'es' ? es : en;
     const usuario = interaction.options.getUser('user');
 
     const warningsPath = path.join(__dirname, '../warnings.json');
-    let warnings = {};
-    
-    if (fs.existsSync(warningsPath)) {
-      warnings = JSON.parse(fs.readFileSync(warningsPath, 'utf8'));
-    }
-
-    const key = `${interaction.guild.id}-${usuario.id}`;
-    const userWarnings = warnings[key] || [];
+    const warnings = fs.existsSync(warningsPath) ? JSON.parse(fs.readFileSync(warningsPath, 'utf8')) : {};
+    const userWarnings = warnings[`${interaction.guild.id}-${usuario.id}`] || [];
 
     if (userWarnings.length === 0) {
-      return await interaction.reply({
-        content: getText('no_warnings'),
-        ephemeral: true
-      });
+      return interaction.reply({ content: L(`✅ ${usuario.username} no tiene advertencias.`, `✅ ${usuario.username} has no warnings.`), ephemeral: true });
     }
 
     const embed = new EmbedBuilder()
-      .setTitle(`${getText('warn_list')} - ${usuario.username}`)
+      .setTitle(L(`⚠️ Advertencias — ${usuario.username}`, `⚠️ Warnings — ${usuario.username}`))
       .setThumbnail(usuario.displayAvatarURL())
       .setColor(0xFEE75C)
-      .setDescription(`${getText('total_warnings')}: ${userWarnings.length}`)
+      .setDescription(L(`Total: **${userWarnings.length}**`, `Total: **${userWarnings.length}**`))
       .setTimestamp();
 
-    userWarnings.slice(-10).forEach((warn, index) => {
+    userWarnings.slice(-10).forEach((warn, i) => {
       embed.addFields({
-        name: `${getText('warnings')} #${index + 1}`,
-        value: `**${getText('afk_reason')}:** ${warn.reason}\n**${getText('moderator')}:** <@${warn.moderator}>\n**Fecha:** <t:${Math.floor(warn.timestamp / 1000)}:R>`,
+        name: `#${i + 1}`,
+        value: `**${L('Razón', 'Reason')}:** ${warn.reason}\n**${L('Moderador', 'Moderator')}:** <@${warn.moderator}>\n**${L('Fecha', 'Date')}:** <t:${Math.floor(warn.timestamp / 1000)}:R>`,
       });
     });
 

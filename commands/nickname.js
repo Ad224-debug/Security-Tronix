@@ -1,80 +1,42 @@
-const { PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 
 module.exports = {
-  data: {
-    name: 'nickname',
-    description: 'Change a user\'s nickname',
-    options: [
-      {
-        name: 'user',
-        description: 'User to change nickname',
-        type: 6, // USER type
-        required: true,
-      },
-      {
-        name: 'nickname',
-        description: 'New nickname (leave empty to reset)',
-        type: 3, // STRING type
-        required: false,
-      },
-    ],
-  },
-  async execute(interaction) {
-    try {
-      if (!interaction.member.permissions.has(PermissionFlagsBits.ManageNicknames)) {
-        const lang = interaction.client.getLanguage(interaction.guild.id);
-        const msg = lang === 'es' 
-          ? '❌ No tienes permisos para gestionar apodos.'
-          : '❌ You don\'t have permission to manage nicknames.';
-        return await interaction.reply({
-          content: msg,
-          ephemeral: true
-        });
-      }
+  data: new SlashCommandBuilder()
+    .setName('nickname')
+    .setDescription('Change a user\'s nickname')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageNicknames)
+    .addUserOption(o => o.setName('user').setDescription('User to change nickname').setRequired(true))
+    .addStringOption(o => o.setName('nickname').setDescription('New nickname (leave empty to reset)').setMaxLength(32)),
 
-      const usuario = interaction.options.getUser('user');
+  async execute(interaction) {
+    const lang = interaction.client.getLanguage(interaction.guild.id);
+    const L = (es, en) => lang === 'es' ? es : en;
+    const usuario = interaction.options.getUser('user');
+    const nickname = interaction.options.getString('nickname');
+
+    try {
       const member = await interaction.guild.members.fetch(usuario.id);
-      const nickname = interaction.options.getString('nickname');
-      const lang = interaction.client.getLanguage(interaction.guild.id);
 
       if (member.roles.highest.position >= interaction.member.roles.highest.position && interaction.user.id !== interaction.guild.ownerId) {
-        const msg = lang === 'es'
-          ? '❌ No puedes cambiar el apodo de alguien con un rol igual o superior al tuyo.'
-          : '❌ You cannot change the nickname of someone with an equal or higher role.';
-        return await interaction.reply({
-          content: msg,
-          ephemeral: true
-        });
+        return interaction.reply({ content: L('❌ No puedes cambiar el apodo de alguien con un rol igual o superior al tuyo.', '❌ Cannot change nickname of someone with equal or higher role.'), ephemeral: true });
       }
 
-      const oldNickname = member.nickname || usuario.username;
+      const oldNick = member.nickname || usuario.username;
       await member.setNickname(nickname);
 
-      const title = lang === 'es' ? '✏️ Apodo Cambiado' : '✏️ Nickname Changed';
-      const userField = lang === 'es' ? 'Usuario' : 'User';
-      const oldField = lang === 'es' ? 'Apodo Anterior' : 'Old Nickname';
-      const newField = lang === 'es' ? 'Nuevo Apodo' : 'New Nickname';
-      const moderatorField = lang === 'es' ? 'Moderador' : 'Moderator';
-      const resetText = lang === 'es' ? 'Restablecido' : 'Reset';
-
       const embed = new EmbedBuilder()
-        .setTitle(title)
+        .setTitle(L('✏️ Apodo Cambiado', '✏️ Nickname Changed'))
         .setColor(0x3498DB)
         .addFields(
-          { name: userField, value: `${usuario.tag}`, inline: true },
-          { name: oldField, value: oldNickname, inline: true },
-          { name: newField, value: nickname || resetText, inline: true },
-          { name: moderatorField, value: `${interaction.user.tag}`, inline: true }
+          { name: L('Usuario', 'User'), value: `${usuario}`, inline: true },
+          { name: L('Antes', 'Before'), value: oldNick, inline: true },
+          { name: L('Después', 'After'), value: nickname || L('Restablecido', 'Reset'), inline: true }
         )
         .setTimestamp();
 
       await interaction.reply({ embeds: [embed] });
     } catch (error) {
-      console.error('Error en comando nickname:', error);
-      await interaction.reply({
-        content: '❌ Hubo un error al ejecutar este comando.',
-        ephemeral: true
-      }).catch(console.error);
+      await interaction.reply({ content: '❌ Error al cambiar el apodo.', ephemeral: true });
     }
   },
 };

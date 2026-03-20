@@ -22,6 +22,9 @@ module.exports = {
     // prefix
     .addSubcommand(s => s.setName('prefix').setDescription('Cambiar prefijo del bot')
       .addStringOption(o => o.setName('prefix').setDescription('Nuevo prefijo').setRequired(true).setMaxLength(3)))
+    // language
+    .addSubcommand(s => s.setName('language').setDescription('Cambiar idioma del bot / Change bot language')
+      .addStringOption(o => o.setName('lang').setDescription('Idioma / Language').setRequired(true).addChoices({ name: 'Español', value: 'es' }, { name: 'English', value: 'en' })))
     // warnsetup
     .addSubcommand(s => s.setName('warnsetup').setDescription('Configurar sistema de advertencias')
       .addBooleanOption(o => o.setName('dm').setDescription('Notificar por DM al advertir').setRequired(true))
@@ -102,6 +105,16 @@ module.exports = {
       config.prefixes[interaction.guild.id] = prefix;
       save();
       return interaction.reply({ embeds: [new EmbedBuilder().setTitle(L('✅ Prefijo Actualizado','✅ Prefix Updated')).setDescription(L(`Nuevo prefijo: \`${prefix}\``,`New prefix: \`${prefix}\``)).setColor(0x57F287).setTimestamp()], ephemeral: true });
+    }
+
+    // ── LANGUAGE ─────────────────────────────────────────────────────────────
+    if (sub === 'language') {
+      const newLang = interaction.options.getString('lang');
+      if (!config.languages) config.languages = {};
+      config.languages[interaction.guild.id] = newLang;
+      save();
+      const langName = newLang === 'es' ? 'Español 🇪🇸' : 'English 🇺🇸';
+      return interaction.reply({ embeds: [new EmbedBuilder().setTitle('✅ Language / Idioma').setDescription(`${newLang === 'es' ? 'Idioma cambiado a' : 'Language changed to'} **${langName}**`).setColor(0x57F287).setTimestamp()], ephemeral: true });
     }
 
     // ── WARNSETUP ────────────────────────────────────────────────────────────

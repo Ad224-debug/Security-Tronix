@@ -1,93 +1,62 @@
-const { PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 
-const messageHistory = new Map();
-const deletedMessages = new Map();
+const messageHistory = new Map(); // key -> [{ content, channelId, timestamp, deleted }]
+const deletedMessages = new Map(); // key -> [{ content, channelId, timestamp }]
+const TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+function pruneOld(map) {
+  const cutoff = Date.now() - TTL;
+  for (const [key, arr] of map) {
+    const filtered = arr.filter(m => (m.deletedAt || m.timestamp) > cutoff);
+    if (filtered.length === 0) map.delete(key);
+    else map.set(key, filtered);
+  }
+}
 
 function setupMessageTracking(client) {
+  // Prune every 6 hours
+  setInterval(() => { pruneOld(messageHistory); pruneOld(deletedMessages); }, 6 * 60 * 60 * 1000);
+
   client.on('messageCreate', (message) => {
-    if (!message.guild) return;
-    
+    if (!message.guild || message.author.bot) return;
     const key = `${message.guild.id}-${message.author.id}`;
-    if (!messageHistory.has(key)) {
-      messageHistory.set(key, []);
-    }
-    
-    const history = messageHistory.get(key);
-    history.push({
-      content: message.content,
-      channelId: message.channel.id,
-      channelName: message.channel.name,
-      timestamp: message.createdTimestamp,
-      messageId: message.id,
-      deleted: false,
-    });
-    
-    if (history.length > 50) {
-      history.shift();
-    }
+    const history = messageHistory.get(key) || [];
+    history.push({ content: message.content, channelId: message.channel.id, timestamp: message.createdTimestamp, messageId: message.id, deleted: false });
+    if (history.length > 50) history.shift();
+    messageHistory.set(key, history);
   });
 
   client.on('messageDelete', (message) => {
-    if (!message.guild || !message.author) return;
-    
+    if (!message.guild || !message.author || message.author.bot) return;
     const key = `${message.guild.id}-${message.author.id}`;
+
     const history = messageHistory.get(key);
-    
     if (history) {
       const msg = history.find(m => m.messageId === message.id);
-      if (msg) {
-        msg.deleted = true;
-      }
+      if (msg) msg.deleted = true;
     }
-    
-    const deletedKey = `${message.guild.id}-${message.author.id}`;
-    if (!deletedMessages.has(deletedKey)) {
-      deletedMessages.set(deletedKey, []);
-    }
-    
-    deletedMessages.get(deletedKey).push({
-      content: message.content || '[Content not available]',
-      channelId: message.channel.id,
-      channelName: message.channel.name,
-      timestamp: message.createdTimestamp,
-      deletedAt: Date.now(),
-    });
+
+    const deleted = deletedMessages.get(key) || [];
+    deleted.push({ content: message.content || '[Content unavailable]', channelId: message.channel.id, timestamp: message.createdTimestamp, deletedAt: Date.now() });
+    if (deleted.length > 50) deleted.shift();
+    deletedMessages.set(key, deleted);
   });
 }
 
 module.exports = {
-  data: {
-    name: 'messageview',
-    description: 'View user message history',
-    options: [
-      {
-        name: 'user',
-        description: 'User whose history you want to see',
-        type: 6, // USER type
-        required: true,
-      },
-      {
-        name: 'type',
-        description: 'Type of messages to show',
-        type: 3, // STRING type
-        required: false,
-        choices: [
-          { name: 'All messages', value: 'all' },
-          { name: 'Deleted only', value: 'deleted' },
-        ],
-      },
-    ],
-  },
-  async execute(interaction) {
-    const getText = (key) => interaction.client.getText(interaction.guild.id, key);
-    
-    if (!interaction.member.permissions.has(PermissionFlagsBits.ManageMessages)) {
-      return await interaction.reply({
-        content: getText('no_permission'),
-        ephemeral: true
-      });
-    }
+  data: new SlashCommandBuilder()
+    .setName('messageview')
+    .setDescription('View user message history')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
+    .addUserOption(o => o.setName('user').setDescription('User to inspect').setRequired(true))
+    .addStringOption(o => o.setName('type').setDescription('Type of messages').addChoices(
+      { name: 'All', value: 'all' },
+      { name: 'Deleted only', value: 'deleted' }
+    )),
 
+  async execute(interaction) {
+    const lang = interaction.client.getLanguage(interaction.guild.id);
+    const L = (es, en) => lang === 'es' ? es : en;
     const usuario = interaction.options.getUser('user');
     const tipo = interaction.options.getString('type') || 'all';
     const key = `${interaction.guild.id}-${usuario.id}`;
@@ -96,63 +65,32 @@ module.exports = {
 
     const history = messageHistory.get(key) || [];
     const deleted = deletedMessages.get(key) || [];
-    const lang = interaction.client.getLanguage(interaction.guild.id);
 
     if (history.length === 0 && deleted.length === 0) {
-      const msg = lang === 'es'
-        ? `📭 No hay historial de mensajes registrado para ${usuario.username}.\n\n⚠️ Nota: Solo se registran mensajes desde que el bot está activo.`
-        : `📭 No message history recorded for ${usuario.username}.\n\n⚠️ Note: Only messages since the bot is active are recorded.`;
-      return await interaction.editReply({ content: msg });
+      return interaction.editReply({ content: L(`📭 Sin historial para ${usuario.username}. Solo se registran mensajes desde que el bot está activo.`, `📭 No history for ${usuario.username}. Only messages since the bot started are recorded.`) });
     }
 
-    let messagesToShow = [];
-
-    if (tipo === 'deleted') {
-      messagesToShow = deleted.map(msg => ({
-        content: msg.content,
-        channel: `<#${msg.channelId}>`,
-        time: `<t:${Math.floor(msg.timestamp / 1000)}:R>`,
-        status: lang === 'es' ? '🗑️ Eliminado' : '🗑️ Deleted',
-      }));
-    } else {
-      messagesToShow = history.slice(-20).map(msg => ({
-        content: msg.content || (lang === 'es' ? '[Sin contenido]' : '[No content]'),
-        channel: `<#${msg.channelId}>`,
-        time: `<t:${Math.floor(msg.timestamp / 1000)}:R>`,
-        status: msg.deleted ? (lang === 'es' ? '🗑️ Eliminado' : '🗑️ Deleted') : (lang === 'es' ? '✅ Activo' : '✅ Active'),
-      }));
+    const source = tipo === 'deleted' ? deleted : history.slice(-20);
+    if (source.length === 0) {
+      return interaction.editReply({ content: L('📭 No hay mensajes para mostrar.', '📭 No messages to show.') });
     }
-
-    if (messagesToShow.length === 0) {
-      const msg = lang === 'es'
-        ? `📭 No hay mensajes ${tipo === 'deleted' ? 'eliminados' : ''} para mostrar.`
-        : `📭 No ${tipo === 'deleted' ? 'deleted ' : ''}messages to show.`;
-      return await interaction.editReply({ content: msg });
-    }
-
-    const title = lang === 'es' 
-      ? `📜 Historial de Mensajes - ${usuario.username}`
-      : `📜 Message History - ${usuario.username}`;
 
     const embed = new EmbedBuilder()
-      .setTitle(title)
+      .setTitle(L(`📜 Historial — ${usuario.username}`, `📜 History — ${usuario.username}`))
       .setThumbnail(usuario.displayAvatarURL())
       .setColor(0x5865F2)
       .setTimestamp();
 
-    messagesToShow.slice(-10).forEach((msg) => {
+    source.slice(-10).forEach(msg => {
+      const status = msg.deleted || tipo === 'deleted' ? '🗑️' : '✅';
+      const time = `<t:${Math.floor((msg.timestamp || msg.deletedAt) / 1000)}:R>`;
       embed.addFields({
-        name: `${msg.status} ${msg.time} ${lang === 'es' ? 'en' : 'in'} ${msg.channel}`,
-        value: msg.content.substring(0, 200) || (lang === 'es' ? '[Vacío]' : '[Empty]'),
+        name: `${status} ${time} — <#${msg.channelId}>`,
+        value: (msg.content || L('[Sin contenido]', '[No content]')).substring(0, 200),
       });
     });
 
-    const footerText = lang === 'es'
-      ? `Mostrando últimos ${messagesToShow.length} mensajes | Total registrado: ${history.length}`
-      : `Showing last ${messagesToShow.length} messages | Total recorded: ${history.length}`;
-
-    embed.setFooter({ text: footerText });
-
+    embed.setFooter({ text: L(`Total registrado: ${history.length}`, `Total recorded: ${history.length}`) });
     await interaction.editReply({ embeds: [embed] });
   },
   setupMessageTracking,

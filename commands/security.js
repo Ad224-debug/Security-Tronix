@@ -450,15 +450,18 @@ module.exports = {
       const hibpKey      = process.env.HIBP_KEY;
       const rapidKey     = process.env.RAPIDAPI_KEY;
 
+      // LeakCheck usa endpoint público, siempre disponible
+      // Solo verificar que haya algo útil si el usuario quiere email con HIBP
+      if (!leakcheckKey && !hibpKey && !rapidKey) {
+        // No bloqueamos — LeakCheck público siempre funciona
+      }
+
       // ── Llamadas en paralelo ──────────────────────────────────────────────
       const [lcRes, hibpRes, bdRes] = await Promise.allSettled([
-        // LeakCheck.io
-        leakcheckKey
-          ? fetch(`https://leakcheck.io/api/v2/query/${encodeURIComponent(query)}`, {
-              headers: { 'X-API-Key': leakcheckKey },
-              signal: AbortSignal.timeout(8000)
-            }).then(r => r.json())
-          : Promise.resolve(null),
+        // LeakCheck.io — usa endpoint público (sin key requerida)
+        fetch(`https://leakcheck.io/api/public?check=${encodeURIComponent(query)}`, {
+          signal: AbortSignal.timeout(8000)
+        }).then(async r => ({ ok: r.ok, status: r.status, data: await r.json() })),
 
         // Have I Been Pwned (solo email)
         isEmail && hibpKey
@@ -473,7 +476,7 @@ module.exports = {
           ? fetch(`https://breachdirectory.p.rapidapi.com/?func=auto&term=${encodeURIComponent(query)}`, {
               headers: { 'X-RapidAPI-Key': rapidKey, 'X-RapidAPI-Host': 'breachdirectory.p.rapidapi.com' },
               signal: AbortSignal.timeout(8000)
-            }).then(r => r.json())
+            }).then(async r => ({ ok: r.ok, status: r.status, data: await r.json() }))
           : Promise.resolve(null)
       ]);
 
@@ -481,16 +484,21 @@ module.exports = {
       const results = { leakcheck: null, hibp: null, breachdir: null };
       const errors = [];
 
-      // LeakCheck
-      if (!leakcheckKey) {
-        errors.push('LeakCheck (sin key)');
-      } else if (lcRes.status === 'fulfilled' && lcRes.value?.success) {
-        results.leakcheck = {
-          found: lcRes.value.found,
-          sources: (lcRes.value.sources || []).slice(0, 8).map(s => `• ${s.name}${s.date ? ` *(${s.date})*` : ''}`)
-        };
+      // LeakCheck (endpoint público, siempre disponible)
+      if (lcRes.status === 'fulfilled' && lcRes.value) {
+        const { ok, status, data } = lcRes.value;
+        if (ok && data?.success) {
+          results.leakcheck = {
+            found: data.found,
+            sources: (data.sources || []).slice(0, 8).map(s => `• ${s.name}${s.date ? ` *(${s.date})*` : ''}`)
+          };
+        } else if (status === 429) {
+          errors.push('LeakCheck (rate limit)');
+        } else {
+          errors.push(`LeakCheck (error ${status})`);
+        }
       } else {
-        errors.push('LeakCheck (error)');
+        errors.push('LeakCheck (timeout/error de red)');
       }
 
       // HIBP
@@ -515,19 +523,31 @@ module.exports = {
       // BreachDirectory
       if (!rapidKey) {
         errors.push('BreachDirectory (sin key)');
-      } else if (bdRes.status === 'fulfilled' && bdRes.value?.success) {
-        results.breachdir = {
-          found: bdRes.value.found,
-          sources: (bdRes.value.result || []).slice(0, 6).map(r => `• ${r.sources?.join(', ') || 'Desconocido'}`)
-        };
+      } else if (bdRes.status === 'fulfilled' && bdRes.value) {
+        const { ok, status, data } = bdRes.value;
+        if (ok && data?.success) {
+          results.breachdir = {
+            found: data.found,
+            sources: (data.result || []).slice(0, 6).map(r => `• ${r.sources?.join(', ') || 'Desconocido'}`)
+          };
+        } else if (status === 403) {
+          errors.push('BreachDirectory (no suscrito en RapidAPI)');
+        } else if (status === 401) {
+          errors.push('BreachDirectory (key inválida)');
+        } else if (status === 429) {
+          errors.push('BreachDirectory (rate limit)');
+        } else {
+          errors.push(`BreachDirectory (error ${status})`);
+        }
       } else {
-        errors.push('BreachDirectory (error)');
+        errors.push('BreachDirectory (timeout/error de red)');
       }
 
       // ── Construir embed ───────────────────────────────────────────────────
       const totalFound = (results.leakcheck?.found || 0) + (results.hibp?.found || 0) + (results.breachdir?.found || 0);
+      const anySearched = results.leakcheck !== null || results.hibp !== null || results.breachdir !== null;
       const color  = totalFound > 5 ? 0xED4245 : totalFound > 0 ? 0xFFA500 : 0x57F287;
-      const status = totalFound > 5 ? '🔴 ALTO RIESGO' : totalFound > 0 ? '🟡 ENCONTRADO' : '🟢 LIMPIO';
+      const status = totalFound > 5 ? '🔴 ALTO RIESGO' : totalFound > 0 ? '🟡 ENCONTRADO' : anySearched ? '🟢 LIMPIO' : '⚪ SIN DATOS';
 
       const embed = new EmbedBuilder()
         .setTitle('🔍 Búsqueda en Filtraciones de Datos')

@@ -1097,6 +1097,62 @@ client.on('interactionCreate', async (interaction) => {
     return;
   }
 
+  // Manejar botones de reportes
+  if (interaction.isButton() && interaction.customId?.startsWith('report_action_')) {
+    try {
+      if (!interaction.member.permissions.has(PermissionFlagsBits.ModerateMembers)) {
+        return await interaction.reply({ content: '❌ No tienes permisos para gestionar reportes.', ephemeral: true });
+      }
+
+      const parts = interaction.customId.split('_');
+      // format: report_action_<reportId>_<action>  (reportId may contain underscores via timestamp)
+      const action = parts[parts.length - 1];
+      const reportId = parts.slice(2, -1).join('_');
+      const userId = reportId.split('-')[1];
+      const lang = getLanguage(interaction.guild.id);
+      const L = (es, en) => lang === 'es' ? es : en;
+
+      if (action === 'dismiss') {
+        const embed = EmbedBuilder.from(interaction.message.embeds[0])
+          .setColor(0x808080)
+          .setFooter({ text: `Report ID: ${reportId} • ${L('Descartado por', 'Dismissed by')} ${interaction.user.tag}` });
+        await interaction.message.edit({ embeds: [embed], components: [] });
+        return await interaction.reply({ content: L('✅ Reporte descartado.', '✅ Report dismissed.'), ephemeral: true });
+      }
+
+      const member = await interaction.guild.members.fetch(userId).catch(() => null);
+      if (!member) {
+        return await interaction.reply({ content: L('❌ No se encontró al usuario reportado.', '❌ Reported user not found.'), ephemeral: true });
+      }
+
+      if (action === 'warn') {
+        const warningsPath = path.join(__dirname, 'warnings.json');
+        const warnings = fs.existsSync(warningsPath) ? JSON.parse(fs.readFileSync(warningsPath, 'utf8')) : {};
+        const key = `${interaction.guild.id}-${userId}`;
+        if (!warnings[key]) warnings[key] = [];
+        warnings[key].push({ reason: L('Reportado por un usuario', 'Reported by a user'), moderator: interaction.user.id, timestamp: Date.now() });
+        fs.writeFileSync(warningsPath, JSON.stringify(warnings, null, 2));
+      } else if (action === 'timeout') {
+        await member.timeout(60 * 60 * 1000, L('Reportado por un usuario', 'Reported by a user'));
+      } else if (action === 'kick') {
+        await member.kick(L('Reportado por un usuario', 'Reported by a user'));
+      } else if (action === 'ban') {
+        await interaction.guild.members.ban(userId, { reason: L('Reportado por un usuario', 'Reported by a user') });
+      }
+
+      const actionLabels = { warn: '⚠️ Warn', timeout: '⏱️ Timeout (1h)', kick: '👢 Kick', ban: '🔨 Ban' };
+      const embed = EmbedBuilder.from(interaction.message.embeds[0])
+        .setColor(0x57F287)
+        .setFooter({ text: `Report ID: ${reportId} • ${L('Acción', 'Action')}: ${actionLabels[action]} por ${interaction.user.tag}` });
+      await interaction.message.edit({ embeds: [embed], components: [] });
+      await interaction.reply({ content: L(`✅ Acción **${actionLabels[action]}** aplicada.`, `✅ Action **${actionLabels[action]}** applied.`), ephemeral: true });
+    } catch (error) {
+      console.error('Error en report button:', error);
+      await interaction.reply({ content: '❌ Error al procesar la acción.', ephemeral: true });
+    }
+    return;
+  }
+
   // Manejar botones y modals de automod
   if ((interaction.isButton() || interaction.isModalSubmit()) && interaction.customId?.startsWith('am_')) {
     try {
