@@ -17,7 +17,10 @@ module.exports = {
       .addStringOption(o => o.setName('username').setDescription('Nombre de usuario de Roblox').setRequired(true)))
     .addSubcommand(s => s.setName('roblox_avatar').setDescription('Muestra el avatar/foto de una cuenta de Roblox')
       .addStringOption(o => o.setName('username').setDescription('Nombre de usuario de Roblox').setRequired(true))
-      .addStringOption(o => o.setName('tipo').setDescription('Tipo de imagen').addChoices({ name: 'Headshot (cara)', value: 'headshot' }, { name: 'Busto', value: 'bust' }, { name: 'Cuerpo completo', value: 'full' }))),
+      .addStringOption(o => o.setName('tipo').setDescription('Tipo de imagen').addChoices({ name: 'Headshot (cara)', value: 'headshot' }, { name: 'Busto', value: 'bust' }, { name: 'Cuerpo completo', value: 'full' })))
+    .addSubcommand(s => s.setName('leakcheck').setDescription('Busca si un username/email aparece en filtraciones de datos')
+      .addStringOption(o => o.setName('query').setDescription('Username o email a buscar').setRequired(false))
+      .addUserOption(o => o.setName('user').setDescription('Usuario de Discord (usa su username como query)').setRequired(false))),
 
   async execute(interaction) {
     const sub = interaction.options.getSubcommand();
@@ -286,19 +289,20 @@ module.exports = {
 
         const [
           userData, friendsData, followersData, followingData,
-          badgesData, groupsData, gamesData, avatarData
+          badgesData, groupsData, gamesData, premiumData, avatarData
         ] = await Promise.all([
           userRes.json(), friendsRes.json(), followersRes.json(), followingRes.json(),
           badgesRes.json(), groupsRes.json(), gamesRes.json(),
-          premiumRes.json(), // premiumRes result discarded below, we use status code
+          premiumRes.json().catch(() => null),
           avatarRes.json()
         ]);
 
         // Premium: API returns true/false directly or { isPremium: bool }
         let isPremium = false;
         try {
-          const premiumText = await premiumRes.text().catch(() => 'false');
-          isPremium = premiumText === 'true' || premiumText.includes('"isPremium":true');
+          if (typeof premiumData === 'boolean') isPremium = premiumData;
+          else if (premiumData?.isPremium) isPremium = true;
+          else isPremium = premiumRes.status === 200;
         } catch { isPremium = false; }
 
         // 3. Presence (online status) via POST
@@ -415,6 +419,146 @@ module.exports = {
         console.error('[roblox_avatar]', err);
         return interaction.editReply({ content: '❌ Error al obtener el avatar de Roblox.' });
       }
+    }
+
+    // ── LEAKCHECK ────────────────────────────────────────────────────────────
+    if (sub === 'leakcheck') {
+      // Defer FIRST — antes de cualquier lógica para evitar timeout
+      await interaction.deferReply({ ephemeral: true });
+
+      if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator))
+        return interaction.editReply({ content: '❌ Solo administradores.' });
+
+      const rawQuery = interaction.options.getString('query');
+      const targetUser = interaction.options.getUser('user');
+
+      if (!rawQuery && !targetUser)
+        return interaction.editReply({ content: '❌ Debes proporcionar un `query` o un `user`.' });
+
+      const query = rawQuery ? rawQuery.trim() : targetUser.username;
+      const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(query);
+      const queryType = isEmail ? 'email' : 'username';
+
+      const leakcheckKey = process.env.LEAKCHECK_KEY;
+      const hibpKey      = process.env.HIBP_KEY;
+      const rapidKey     = process.env.RAPIDAPI_KEY;
+
+      // ── Llamadas en paralelo ──────────────────────────────────────────────
+      const [lcRes, hibpRes, bdRes] = await Promise.allSettled([
+        // LeakCheck.io
+        leakcheckKey
+          ? fetch(`https://leakcheck.io/api/v2/query/${encodeURIComponent(query)}`, {
+              headers: { 'X-API-Key': leakcheckKey },
+              signal: AbortSignal.timeout(8000)
+            }).then(r => r.json())
+          : Promise.resolve(null),
+
+        // Have I Been Pwned (solo email)
+        isEmail && hibpKey
+          ? fetch(`https://haveibeenpwned.com/api/v3/breachedaccount/${encodeURIComponent(query)}?truncateResponse=false`, {
+              headers: { 'hibp-api-key': hibpKey, 'User-Agent': 'TronixSecurity' },
+              signal: AbortSignal.timeout(8000)
+            }).then(async r => ({ status: r.status, data: r.status === 200 ? await r.json() : [] }))
+          : Promise.resolve(null),
+
+        // BreachDirectory
+        rapidKey
+          ? fetch(`https://breachdirectory.p.rapidapi.com/?func=auto&term=${encodeURIComponent(query)}`, {
+              headers: { 'X-RapidAPI-Key': rapidKey, 'X-RapidAPI-Host': 'breachdirectory.p.rapidapi.com' },
+              signal: AbortSignal.timeout(8000)
+            }).then(r => r.json())
+          : Promise.resolve(null)
+      ]);
+
+      // ── Procesar resultados ───────────────────────────────────────────────
+      const results = { leakcheck: null, hibp: null, breachdir: null };
+      const errors = [];
+
+      // LeakCheck
+      if (!leakcheckKey) {
+        errors.push('LeakCheck (sin key)');
+      } else if (lcRes.status === 'fulfilled' && lcRes.value?.success) {
+        results.leakcheck = {
+          found: lcRes.value.found,
+          sources: (lcRes.value.sources || []).slice(0, 8).map(s => `• ${s.name}${s.date ? ` *(${s.date})*` : ''}`)
+        };
+      } else {
+        errors.push('LeakCheck (error)');
+      }
+
+      // HIBP
+      if (!isEmail) {
+        // no-op, se muestra nota abajo
+      } else if (!hibpKey) {
+        errors.push('HIBP (sin key)');
+      } else if (hibpRes.status === 'fulfilled' && hibpRes.value) {
+        const { status: httpStatus, data } = hibpRes.value;
+        if (httpStatus === 200) {
+          results.hibp = {
+            found: data.length,
+            breaches: data.slice(0, 6).map(b => `• **${b.Name}** *(${b.BreachDate})* — ${b.DataClasses.slice(0, 3).join(', ')}`)
+          };
+        } else {
+          results.hibp = { found: 0, breaches: [] };
+        }
+      } else {
+        errors.push('HIBP (error)');
+      }
+
+      // BreachDirectory
+      if (!rapidKey) {
+        errors.push('BreachDirectory (sin key)');
+      } else if (bdRes.status === 'fulfilled' && bdRes.value?.success) {
+        results.breachdir = {
+          found: bdRes.value.found,
+          sources: (bdRes.value.result || []).slice(0, 6).map(r => `• ${r.sources?.join(', ') || 'Desconocido'}`)
+        };
+      } else {
+        errors.push('BreachDirectory (error)');
+      }
+
+      // ── Construir embed ───────────────────────────────────────────────────
+      const totalFound = (results.leakcheck?.found || 0) + (results.hibp?.found || 0) + (results.breachdir?.found || 0);
+      const color  = totalFound > 5 ? 0xED4245 : totalFound > 0 ? 0xFFA500 : 0x57F287;
+      const status = totalFound > 5 ? '🔴 ALTO RIESGO' : totalFound > 0 ? '🟡 ENCONTRADO' : '🟢 LIMPIO';
+
+      const embed = new EmbedBuilder()
+        .setTitle('🔍 Búsqueda en Filtraciones de Datos')
+        .setColor(color)
+        .addFields(
+          { name: '🔎 Búsqueda', value: `\`${query}\` *(${queryType})*${targetUser ? `\n👤 ${targetUser}` : ''}`, inline: true },
+          { name: '📊 Estado',   value: status,        inline: true },
+          { name: '📋 Total',    value: `${totalFound}`, inline: true }
+        );
+
+      if (results.leakcheck) {
+        embed.addFields(results.leakcheck.found > 0
+          ? { name: `🔓 LeakCheck.io — ${results.leakcheck.found} filtración(es)`, value: results.leakcheck.sources.join('\n') || 'Sin detalles' }
+          : { name: '✅ LeakCheck.io', value: 'No encontrado', inline: true });
+      }
+
+      if (results.hibp) {
+        embed.addFields(results.hibp.found > 0
+          ? { name: `🔓 Have I Been Pwned — ${results.hibp.found} filtración(es)`, value: results.hibp.breaches.join('\n') || 'Sin detalles' }
+          : { name: '✅ Have I Been Pwned', value: 'No encontrado', inline: true });
+      } else if (!isEmail) {
+        embed.addFields({ name: 'ℹ️ Have I Been Pwned', value: 'Solo busca por email', inline: true });
+      }
+
+      if (results.breachdir) {
+        embed.addFields(results.breachdir.found > 0
+          ? { name: `🔓 BreachDirectory — ${results.breachdir.found} resultado(s)`, value: results.breachdir.sources.join('\n') || 'Sin detalles' }
+          : { name: '✅ BreachDirectory', value: 'No encontrado', inline: true });
+      }
+
+      if (errors.length > 0)
+        embed.addFields({ name: '⚠️ APIs no disponibles', value: errors.map(e => `• ${e}`).join('\n') });
+
+      embed
+        .setFooter({ text: 'LeakCheck.io • HaveIBeenPwned • BreachDirectory — Solo admins' })
+        .setTimestamp();
+
+      return interaction.editReply({ embeds: [embed] });
     }
   }
 };

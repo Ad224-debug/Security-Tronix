@@ -143,17 +143,25 @@ const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('
 
 for (const file of commandFiles) {
   const filePath = path.join(commandsPath, file);
-  const command = require(filePath);
-  client.commands.set(command.data.name, command);
-  
-  // Inicializar tracking de mensajes si existe
-  if (command.setupMessageTracking) {
-    command.setupMessageTracking(client);
-  }
-  
-  // Inicializar sistema AFK si existe
-  if (command.setupAFKSystem) {
-    command.setupAFKSystem(client);
+  try {
+    const command = require(filePath);
+    if (!command.data || !command.execute) {
+      console.warn(`[WARN] Comando ${file} no tiene data o execute, saltando.`);
+      continue;
+    }
+    client.commands.set(command.data.name, command);
+    
+    // Inicializar tracking de mensajes si existe
+    if (command.setupMessageTracking) {
+      command.setupMessageTracking(client);
+    }
+    
+    // Inicializar sistema AFK si existe
+    if (command.setupAFKSystem) {
+      command.setupAFKSystem(client);
+    }
+  } catch (err) {
+    console.error(`[ERROR] Fallo al cargar comando ${file}:`, err.message);
   }
 }
 
@@ -178,7 +186,16 @@ client.once('ready', () => {
     roleManager = new RoleManager(client);
     reminderScheduler = new ReminderScheduler(client, eventManager);
     statsTracker = new StatisticsTracker(eventManager);
-    
+
+    // Record attendance stats when an event completes
+    eventManager.onEventCompleted = (event) => {
+      try {
+        statsTracker.recordAttendance(event);
+      } catch (err) {
+        console.error('Error recording attendance stats:', err);
+      }
+    };
+
     console.log('✅ Event system initialized');
     
     // Configurar cron jobs
@@ -207,11 +224,21 @@ function setupCronJobs() {
     }
   });
 
+  // Generar eventos recurrentes diariamente a medianoche
+  cron.schedule('0 0 * * *', async () => {
+    try {
+      await eventManager.generateRecurringEvents();
+    } catch (error) {
+      console.error('Error in recurring events cron job:', error);
+    }
+  });
+
   // Limpieza diaria a las 2 AM
   cron.schedule('0 2 * * *', () => {
     try {
       reminderScheduler.cleanupOldReminders();
       statsTracker.cleanupOldStats();
+      eventManager.cleanupOldEvents();
       console.log('✅ Daily cleanup completed');
     } catch (error) {
       console.error('Error in cleanup cron job:', error);
