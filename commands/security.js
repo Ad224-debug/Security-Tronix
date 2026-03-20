@@ -23,13 +23,27 @@ module.exports = {
       .addUserOption(o => o.setName('user').setDescription('Usuario de Discord (usa su username como query)').setRequired(false))),
 
   async execute(interaction) {
-    const sub = interaction.options.getSubcommand();
+    let sub;
+    try {
+      sub = interaction.options.getSubcommand();
+    } catch (e) {
+      console.error('[security] getSubcommand error:', e);
+      return interaction.reply({ content: '❌ Error interno.', ephemeral: true });
+    }
+
+    // Defer inmediato para todos los subcomandos — evita timeout de 3s
+    const ephemeralSubs = ['ipinfo', 'usercheck', 'leakcheck'];
+    try {
+      await interaction.deferReply({ ephemeral: ephemeralSubs.includes(sub) });
+    } catch (e) {
+      console.error('[security] deferReply error:', e);
+      return;
+    }
 
     // ── IPINFO ───────────────────────────────────────────────────────────────
     if (sub === 'ipinfo') {
-      if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) return interaction.reply({ content: '❌ Solo administradores.', ephemeral: true });
+      if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) return interaction.editReply({ content: '❌ Solo administradores.' });
       const ip = interaction.options.getString('ip').trim();
-      await interaction.deferReply({ ephemeral: true });
       const ipRegex = /^(\d{1,3}\.){3}\d{1,3}$/;
       if (!ipRegex.test(ip)) return interaction.editReply({ content: '❌ Formato de IP inválido.' });
       const parts = ip.split('.').map(Number);
@@ -103,7 +117,6 @@ module.exports = {
     // ── SCANURL ──────────────────────────────────────────────────────────────
     if (sub === 'scanurl') {
       let url = interaction.options.getString('url').trim();
-      await interaction.deferReply();
       if (!url.startsWith('http://') && !url.startsWith('https://')) url = 'https://' + url;
       let domain;
       try { domain = new URL(url).hostname; } catch { return interaction.editReply({ content: '❌ URL inválida.' }); }
@@ -216,9 +229,8 @@ module.exports = {
 
     // ── USERCHECK ────────────────────────────────────────────────────────────
     if (sub === 'usercheck') {
-      if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) return interaction.reply({ content: '❌ Solo administradores.', ephemeral: true });
+      if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) return interaction.editReply({ content: '❌ Solo administradores.' });
       const usuario = interaction.options.getUser('user');
-      await interaction.deferReply({ ephemeral: true });
       const member = await interaction.guild.members.fetch(usuario.id).catch(() => null);
       const casesPath = path.join(__dirname, '../data/mod-cases.json');
       const warningsPath = path.join(__dirname, '../warnings.json');
@@ -257,7 +269,6 @@ module.exports = {
     // ── ROBLOX ───────────────────────────────────────────────────────────────
     if (sub === 'roblox') {
       const username = interaction.options.getString('username');
-      await interaction.deferReply();
       try {
         // 1. Resolve username → userId
         const searchRes = await fetch('https://users.roblox.com/v1/usernames/users', {
@@ -377,7 +388,6 @@ module.exports = {
     if (sub === 'roblox_avatar') {
       const username = interaction.options.getString('username');
       const tipo = interaction.options.getString('tipo') || 'full';
-      await interaction.deferReply();
       try {
         // Resolve username → userId
         const searchRes = await fetch('https://users.roblox.com/v1/usernames/users', {
@@ -423,9 +433,6 @@ module.exports = {
 
     // ── LEAKCHECK ────────────────────────────────────────────────────────────
     if (sub === 'leakcheck') {
-      // Defer FIRST — antes de cualquier lógica para evitar timeout
-      await interaction.deferReply({ ephemeral: true });
-
       if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator))
         return interaction.editReply({ content: '❌ Solo administradores.' });
 
