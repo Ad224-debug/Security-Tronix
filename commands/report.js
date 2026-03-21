@@ -120,7 +120,7 @@ module.exports = {
       );
 
     await reportChannel.send({ 
-      content: `<@&${interaction.guild.roles.cache.find(r => r.permissions.has('Administrator'))?.id || interaction.guild.ownerId}>`,
+      content: `<@${interaction.guild.ownerId}>`,
       embeds: [embed],
       components: [row]
     });

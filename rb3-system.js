@@ -1,13 +1,14 @@
 const fs = require('fs');
 const path = require('path');
+const guildConfig = require('./guild-config');
 
 function getRB3Config(guildId) {
-  const rb3Path = path.join(__dirname, 'data/rb3-config.json');
-  
-  if (!fs.existsSync(rb3Path)) {
-    return null;
-  }
+  // SQLite first, fallback to file
+  const fromDb = guildConfig.get(guildId, 'rb3Config');
+  if (fromDb) return fromDb;
 
+  const rb3Path = path.join(__dirname, 'data/rb3-config.json');
+  if (!fs.existsSync(rb3Path)) return null;
   const rb3 = JSON.parse(fs.readFileSync(rb3Path, 'utf8'));
   return rb3[guildId] || null;
 }

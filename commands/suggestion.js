@@ -69,14 +69,35 @@ module.exports = {
     const suggestionsPath = path.join(__dirname, '../data/suggestions.json');
 
     let config = {};
-    let suggestions = {};
 
     if (fs.existsSync(configPath)) {
       config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
     }
 
-    if (fs.existsSync(suggestionsPath)) {
-      suggestions = JSON.parse(fs.readFileSync(suggestionsPath, 'utf8'));
+    // Helper: load suggestions from SQLite (primary) or file (fallback/migration)
+    function loadSuggestions() {
+      const fromDb = guildConfig.get(interaction.guild.id, 'suggestions');
+      if (fromDb) return fromDb;
+      // fallback: file
+      if (fs.existsSync(suggestionsPath)) {
+        const all = JSON.parse(fs.readFileSync(suggestionsPath, 'utf8'));
+        return all[interaction.guild.id] || [];
+      }
+      return [];
+    }
+
+    // Helper: save suggestions to SQLite (and keep file in sync)
+    function saveSuggestions(list) {
+      guildConfig.set(interaction.guild.id, 'suggestions', list);
+      // also write to file for backup
+      let all = {};
+      if (fs.existsSync(suggestionsPath)) {
+        try { all = JSON.parse(fs.readFileSync(suggestionsPath, 'utf8')); } catch {}
+      }
+      all[interaction.guild.id] = list;
+      const dataDir = path.join(__dirname, '../data');
+      if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+      fs.writeFileSync(suggestionsPath, JSON.stringify(all, null, 2));
     }
 
     // Admin-only subcommands
@@ -111,8 +132,8 @@ module.exports = {
           });
         }
 
-        if (!suggestions[interaction.guild.id]) suggestions[interaction.guild.id] = [];
-        const newId = (suggestions[interaction.guild.id].length || 0) + 1;
+        const guildSuggestions = loadSuggestions();
+        const newId = (guildSuggestions.length || 0) + 1;
 
         const submitEmbed = new EmbedBuilder()
           .setTitle(lang === 'es' ? `💡 Sugerencia #${newId}` : `💡 Suggestion #${newId}`)
@@ -129,7 +150,7 @@ module.exports = {
         await msg.react('✅').catch(() => {});
         await msg.react('❌').catch(() => {});
 
-        suggestions[interaction.guild.id].push({
+        guildSuggestions.push({
           id: newId,
           suggestion: suggestionText,
           userId: interaction.user.id,
@@ -139,9 +160,7 @@ module.exports = {
           timestamp: Date.now()
         });
 
-        const dataDir = path.join(__dirname, '../data');
-        if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
-        fs.writeFileSync(suggestionsPath, JSON.stringify(suggestions, null, 2));
+        saveSuggestions(guildSuggestions);
 
         return await interaction.reply({
           content: lang === 'es' ? `✅ Tu sugerencia #${newId} ha sido enviada.` : `✅ Your suggestion #${newId} has been submitted.`,
@@ -178,14 +197,16 @@ module.exports = {
         const id = interaction.options.getInteger('id');
         const reason = interaction.options.getString('reason') || (lang === 'es' ? 'Sin razón especificada' : 'No reason specified');
 
-        if (!suggestions[interaction.guild.id]) {
+        const guildSuggestionsAD = loadSuggestions();
+
+        if (!guildSuggestionsAD || guildSuggestionsAD.length === 0) {
           return await interaction.reply({
             content: lang === 'es' ? '❌ No hay sugerencias en este servidor.' : '❌ There are no suggestions in this server.',
             ephemeral: true
           });
         }
 
-        const suggestionIndex = suggestions[interaction.guild.id].findIndex(s => s.id === id);
+        const suggestionIndex = guildSuggestionsAD.findIndex(s => s.id === id);
 
         if (suggestionIndex === -1) {
           return await interaction.reply({
@@ -194,7 +215,7 @@ module.exports = {
           });
         }
 
-        const suggestionData = suggestions[interaction.guild.id][suggestionIndex];
+        const suggestionData = guildSuggestionsAD[suggestionIndex];
 
         if (suggestionData.status !== 'pending') {
           return await interaction.reply({
@@ -215,7 +236,6 @@ module.exports = {
           suggestionData.reviewReason = reason;
           suggestionData.reviewedAt = Date.now();
 
-          // Actualizar embed
           const embed = EmbedBuilder.from(message.embeds[0])
             .setColor(isApproved ? 0x57F287 : 0xED4245)
             .spliceFields(2, 1, {
@@ -232,7 +252,6 @@ module.exports = {
 
           await message.edit({ embeds: [embed] });
 
-          // Notificar al autor
           try {
             const author = await interaction.client.users.fetch(suggestionData.userId);
             await author.send({
@@ -247,13 +266,10 @@ module.exports = {
                 timestamp: new Date()
               }]
             });
-          } catch (error) {
-            // Usuario tiene DMs desactivados
-          }
+          } catch {}
 
-          // Guardar cambios
-          suggestions[interaction.guild.id][suggestionIndex] = suggestionData;
-          fs.writeFileSync(suggestionsPath, JSON.stringify(suggestions, null, 2));
+          guildSuggestionsAD[suggestionIndex] = suggestionData;
+          saveSuggestions(guildSuggestionsAD);
 
           await interaction.reply({
             embeds: [{
@@ -272,23 +288,22 @@ module.exports = {
         } catch (error) {
           console.error('Error updating suggestion:', error);
           await interaction.reply({
-            content: lang === 'es'
-              ? '❌ Hubo un error al actualizar la sugerencia.'
-              : '❌ There was an error updating the suggestion.',
+            content: lang === 'es' ? '❌ Hubo un error al actualizar la sugerencia.' : '❌ There was an error updating the suggestion.',
             ephemeral: true
           });
         }
         break;
 
-      case 'list':
-        if (!suggestions[interaction.guild.id] || suggestions[interaction.guild.id].length === 0) {
+      case 'list': {
+        const guildSuggestionsList = loadSuggestions();
+        if (!guildSuggestionsList || guildSuggestionsList.length === 0) {
           return await interaction.reply({
             content: lang === 'es' ? '📭 No hay sugerencias en este servidor.' : '📭 There are no suggestions in this server.',
             ephemeral: true
           });
         }
 
-        const pending = suggestions[interaction.guild.id].filter(s => s.status === 'pending');
+        const pending = guildSuggestionsList.filter(s => s.status === 'pending');
 
         if (pending.length === 0) {
           return await interaction.reply({
@@ -299,7 +314,7 @@ module.exports = {
 
         const listEmbed = new EmbedBuilder()
           .setTitle(lang === 'es' ? '📋 Sugerencias Pendientes' : '📋 Pending Suggestions')
-          .setDescription(pending.map(s => 
+          .setDescription(pending.map(s =>
             `**#${s.id}** - <@${s.userId}> - <t:${Math.floor(s.timestamp / 1000)}:R>\n${s.suggestion.substring(0, 100)}${s.suggestion.length > 100 ? '...' : ''}`
           ).join('\n\n'))
           .setColor(0x5865F2)
@@ -308,18 +323,20 @@ module.exports = {
 
         await interaction.reply({ embeds: [listEmbed], ephemeral: true });
         break;
+      }
 
-      case 'view':
+      case 'view': {
         const viewId = interaction.options.getInteger('id');
+        const guildSuggestionsView = loadSuggestions();
 
-        if (!suggestions[interaction.guild.id]) {
+        if (!guildSuggestionsView || guildSuggestionsView.length === 0) {
           return await interaction.reply({
             content: lang === 'es' ? '❌ No hay sugerencias en este servidor.' : '❌ There are no suggestions in this server.',
             ephemeral: true
           });
         }
 
-        const viewSuggestion = suggestions[interaction.guild.id].find(s => s.id === viewId);
+        const viewSuggestion = guildSuggestionsView.find(s => s.id === viewId);
 
         if (!viewSuggestion) {
           return await interaction.reply({
@@ -328,12 +345,7 @@ module.exports = {
           });
         }
 
-        const statusEmoji = {
-          pending: '⏳',
-          approved: '✅',
-          denied: '❌'
-        };
-
+        const statusEmoji = { pending: '⏳', approved: '✅', denied: '❌' };
         const statusText = {
           pending: lang === 'es' ? 'Pendiente' : 'Pending',
           approved: lang === 'es' ? 'Aprobada' : 'Approved',
@@ -358,9 +370,9 @@ module.exports = {
         }
 
         viewEmbed.setTimestamp();
-
         await interaction.reply({ embeds: [viewEmbed], ephemeral: true });
         break;
+      }
     }
   },
 };

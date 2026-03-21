@@ -2,6 +2,7 @@ const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, AttachmentBuilde
 const { createCase } = require('./case.js');
 const fs = require('fs');
 const path = require('path');
+const guildConfig = require('../guild-config');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -159,15 +160,15 @@ module.exports = {
       try { await usuario.send({ embeds: [new EmbedBuilder().setTitle('⚠️ Has recibido una advertencia').setDescription(`En **${interaction.guild.name}**`).addFields({ name: 'Razón', value: razon }, { name: 'Total', value: `${warnCount}` }).setColor(0xFEE75C).setTimestamp()] }); } catch {}
       await interaction.reply({ embeds: [new EmbedBuilder().setTitle('⚠️ Usuario Advertido').setThumbnail(usuario.displayAvatarURL()).addFields({ name: 'Usuario', value: `${usuario} (${usuario.id})`, inline: true }, { name: 'Moderador', value: `${interaction.user}`, inline: true }, { name: 'Razón', value: razon }, { name: 'Total advertencias', value: `${warnCount}`, inline: true }, { name: 'Caso', value: `#${caseId}`, inline: true }).setColor(0xFEE75C).setTimestamp()] });
       const warnConfigPath = path.join(__dirname, '../warn-config.json');
-      const warnConfig = fs.existsSync(warnConfigPath) ? JSON.parse(fs.readFileSync(warnConfigPath, 'utf8')) : {};
-      const guildConfig = warnConfig[interaction.guild.id] || { autoAction: 'none', autoActionThreshold: 3 };
-      if (guildConfig.autoAction !== 'none' && warnCount >= guildConfig.autoActionThreshold && miembro) {
+      const warnConfigFile = fs.existsSync(warnConfigPath) ? JSON.parse(fs.readFileSync(warnConfigPath, 'utf8')) : {};
+      const guildWarnCfg = guildConfig.get(interaction.guild.id, 'warnSetup') || warnConfigFile[interaction.guild.id] || { autoAction: 'none', autoActionThreshold: 3 };
+      if (guildWarnCfg.autoAction !== 'none' && warnCount >= guildWarnCfg.autoActionThreshold && miembro) {
         const autoReason = `Auto: ${warnCount} advertencias`;
         try {
-          if (guildConfig.autoAction === 'kick') await miembro.kick(autoReason);
-          else if (guildConfig.autoAction === 'ban') await interaction.guild.members.ban(usuario, { reason: autoReason });
-          else if (guildConfig.autoAction === 'timeout') await miembro.timeout(3600000, autoReason);
-          await interaction.followUp({ content: `⚡ Acción automática: **${guildConfig.autoAction}** por ${warnCount} advertencias.`, ephemeral: true });
+          if (guildWarnCfg.autoAction === 'kick') await miembro.kick(autoReason);
+          else if (guildWarnCfg.autoAction === 'ban') await interaction.guild.members.ban(usuario, { reason: autoReason });
+          else if (guildWarnCfg.autoAction === 'timeout') await miembro.timeout(3600000, autoReason);
+          await interaction.followUp({ content: `⚡ Acción automática: **${guildWarnCfg.autoAction}** por ${warnCount} advertencias.`, ephemeral: true });
         } catch {}
       }
       return;
