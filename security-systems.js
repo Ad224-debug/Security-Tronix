@@ -141,15 +141,19 @@ async function checkPhishing(text) {
 // 3. ALT DETECTOR — en guildMemberAdd
 // ─────────────────────────────────────────────────────────────────────────────
 
-let AltDetector;
+let altDetector = null;
 try {
-  AltDetector = require('discord-alt-detector');
-} catch {
-  AltDetector = null;
-  console.warn('[AltDetector] Package not found, alt detection disabled');
+  const AltDetectorModule = require('discord-alt-detector');
+  // Handle both default export and named export patterns
+  const AltDetector = AltDetectorModule?.default || AltDetectorModule;
+  if (typeof AltDetector === 'function') {
+    altDetector = new AltDetector();
+  } else {
+    console.warn('[AltDetector] Unexpected module format, alt detection disabled');
+  }
+} catch (e) {
+  console.warn('[AltDetector] Package not available, alt detection disabled:', e.message);
 }
-
-const altDetector = AltDetector ? new AltDetector() : null;
 
 /**
  * Analiza si un miembro es probablemente un alt.
