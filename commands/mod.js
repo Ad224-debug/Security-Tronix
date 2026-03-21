@@ -247,7 +247,7 @@ module.exports = {
         }
         if (guildCases.length > 8) embed.setFooter({ text: `Mostrando 8 de ${guildCases.length}` });
       }
-      return interaction.reply({ embeds: [embed], ephemeral: true });
+      return interaction.reply({ embeds: [embed] });
     }
 
     // ── CASE ─────────────────────────────────────────────────────────────────
@@ -263,7 +263,7 @@ module.exports = {
       const embed = new EmbedBuilder().setTitle(`${typeEmoji[modCase.type] || '•'} Caso #${caseId}`).addFields({ name: 'Tipo', value: modCase.type, inline: true }, { name: 'Usuario', value: target ? `${target.tag} (${target.id})` : modCase.targetId, inline: true }, { name: 'Moderador', value: moderator?.tag || '?', inline: true }, { name: 'Razón', value: modCase.reason || 'N/A' }, { name: 'Fecha', value: `<t:${Math.floor(modCase.timestamp/1000)}:F>`, inline: true }).setColor(0x5865F2).setTimestamp(modCase.timestamp);
       if (modCase.duration) embed.addFields({ name: 'Duración', value: modCase.duration, inline: true });
       if (modCase.expiresAt) embed.addFields({ name: 'Expira', value: `<t:${Math.floor(modCase.expiresAt/1000)}:R>`, inline: true });
-      return interaction.reply({ embeds: [embed], ephemeral: true });
+      return interaction.reply({ embeds: [embed] });
     }
 
     // ── NOTE ─────────────────────────────────────────────────────────────────
@@ -271,7 +271,7 @@ module.exports = {
       const usuario = interaction.options.getUser('user');
       const note = interaction.options.getString('note');
       const caseId = createCase(interaction.guild.id, 'note', usuario.id, interaction.user.id, note);
-      return interaction.reply({ embeds: [new EmbedBuilder().setTitle(L('📝 Nota Agregada','📝 Note Added')).setThumbnail(usuario.displayAvatarURL()).addFields({ name: L('Usuario','User'), value: `${usuario} (${usuario.id})`, inline: true }, { name: L('Moderador','Moderator'), value: `${interaction.user}`, inline: true }, { name: L('Nota','Note'), value: note }, { name: L('Caso','Case'), value: `#${caseId}`, inline: true }).setColor(0x5865F2).setFooter({ text: L('El usuario NO será notificado','User will NOT be notified') }).setTimestamp()], ephemeral: true });
+      return interaction.reply({ embeds: [new EmbedBuilder().setTitle(L('📝 Nota Agregada','📝 Note Added')).setThumbnail(usuario.displayAvatarURL()).addFields({ name: L('Usuario','User'), value: `${usuario} (${usuario.id})`, inline: true }, { name: L('Moderador','Moderator'), value: `${interaction.user}`, inline: true }, { name: L('Nota','Note'), value: note }, { name: L('Caso','Case'), value: `#${caseId}`, inline: true }).setColor(0x5865F2).setFooter({ text: L('El usuario NO será notificado','User will NOT be notified') }).setTimestamp()] });
     }
 
     // ── LOG ──────────────────────────────────────────────────────────────────

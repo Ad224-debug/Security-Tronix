@@ -14,7 +14,7 @@ module.exports = {
     try {
       if (!interaction.guild) return interaction.reply({ content: '❌ Solo en servidores.', ephemeral: true });
       console.log('[antiraid] calling deferReply...');
-      await interaction.deferReply({ ephemeral: true });
+      await interaction.deferReply({ ephemeral: false });
       console.log('[antiraid] deferReply OK');
       const sub  = interaction.options.getSubcommand();
       const lang = interaction.client.getLanguage(interaction.guild.id);

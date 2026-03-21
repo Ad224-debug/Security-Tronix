@@ -19,7 +19,7 @@ module.exports = {
     const userWarnings = warnings[`${interaction.guild.id}-${usuario.id}`] || [];
 
     if (userWarnings.length === 0) {
-      return interaction.reply({ content: L(`✅ ${usuario.username} no tiene advertencias.`, `✅ ${usuario.username} has no warnings.`), ephemeral: true });
+      return interaction.reply({ content: L(`✅ ${usuario.username} no tiene advertencias.`, `✅ ${usuario.username} has no warnings.`) });
     }
 
     const embed = new EmbedBuilder()
@@ -36,6 +36,6 @@ module.exports = {
       });
     });
 
-    await interaction.reply({ embeds: [embed], ephemeral: true });
+    await interaction.reply({ embeds: [embed] });
   },
 };
