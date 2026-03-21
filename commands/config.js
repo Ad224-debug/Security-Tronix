@@ -1,6 +1,7 @@
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ChannelType } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
+const guildConfig = require('../guild-config');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -90,6 +91,8 @@ module.exports = {
       // ── REPORTCHANNEL ──────────────────────────────────────────────────────
       if (sub === 'reportchannel') {
         const channel = interaction.options.getChannel('channel');
+        guildConfig.set(interaction.guild.id, 'reportChannel', channel.id);
+        // also keep config.json in sync for other systems
         if (!config.reportChannels) config.reportChannels = {};
         config.reportChannels[interaction.guild.id] = channel.id;
         save();

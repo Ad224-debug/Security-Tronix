@@ -1,6 +1,7 @@
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
+const guildConfig = require('../guild-config');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -39,11 +40,11 @@ module.exports = {
       });
     }
 
-    // Obtener canal de reportes
+    // Obtener canal de reportes — SQLite first, fallback to config.json
     const configPath = path.join(__dirname, '../config.json');
-    let reportChannelId = null;
-    
-    if (fs.existsSync(configPath)) {
+    let reportChannelId = guildConfig.get(interaction.guild.id, 'reportChannel');
+
+    if (!reportChannelId && fs.existsSync(configPath)) {
       const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
       reportChannelId = config.reportChannels?.[interaction.guild.id];
     }
