@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
 
@@ -6,7 +6,15 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('suggestion')
     .setDescription('Gestionar sistema de sugerencias / Manage suggestion system')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('submit')
+        .setDescription('Enviar una sugerencia / Submit a suggestion')
+        .addStringOption(option =>
+          option.setName('suggestion')
+            .setDescription('Tu sugerencia / Your suggestion')
+            .setRequired(true)
+            .setMaxLength(1000)))
     .addSubcommand(subcommand =>
       subcommand
         .setName('setup')
@@ -71,6 +79,65 @@ module.exports = {
     }
 
     switch (subcommand) {
+      case 'submit': {
+        const suggestionText = interaction.options.getString('suggestion');
+        const suggestionChannelId = config.suggestionChannels?.[interaction.guild.id];
+
+        if (!suggestionChannelId) {
+          return await interaction.reply({
+            content: lang === 'es'
+              ? '❌ No se ha configurado un canal de sugerencias. Un administrador debe usar `/suggestion setup` primero.'
+              : '❌ No suggestion channel has been configured. An administrator must use `/suggestion setup` first.',
+            ephemeral: true
+          });
+        }
+
+        const suggestionChannel = await interaction.guild.channels.fetch(suggestionChannelId).catch(() => null);
+        if (!suggestionChannel) {
+          return await interaction.reply({
+            content: lang === 'es' ? '❌ El canal de sugerencias no existe.' : '❌ The suggestion channel does not exist.',
+            ephemeral: true
+          });
+        }
+
+        if (!suggestions[interaction.guild.id]) suggestions[interaction.guild.id] = [];
+        const newId = (suggestions[interaction.guild.id].length || 0) + 1;
+
+        const submitEmbed = new EmbedBuilder()
+          .setTitle(lang === 'es' ? `💡 Sugerencia #${newId}` : `💡 Suggestion #${newId}`)
+          .setDescription(suggestionText)
+          .setColor(0x5865F2)
+          .addFields(
+            { name: lang === 'es' ? '👤 Autor' : '👤 Author', value: `${interaction.user}`, inline: true },
+            { name: lang === 'es' ? '📅 Fecha' : '📅 Date', value: `<t:${Math.floor(Date.now() / 1000)}:R>`, inline: true },
+            { name: lang === 'es' ? '📊 Estado' : '📊 Status', value: '⏳ Pendiente', inline: true }
+          )
+          .setTimestamp();
+
+        const msg = await suggestionChannel.send({ embeds: [submitEmbed] });
+        await msg.react('✅').catch(() => {});
+        await msg.react('❌').catch(() => {});
+
+        suggestions[interaction.guild.id].push({
+          id: newId,
+          suggestion: suggestionText,
+          userId: interaction.user.id,
+          channelId: suggestionChannelId,
+          messageId: msg.id,
+          status: 'pending',
+          timestamp: Date.now()
+        });
+
+        const dataDir = path.join(__dirname, '../data');
+        if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+        fs.writeFileSync(suggestionsPath, JSON.stringify(suggestions, null, 2));
+
+        return await interaction.reply({
+          content: lang === 'es' ? `✅ Tu sugerencia #${newId} ha sido enviada.` : `✅ Your suggestion #${newId} has been submitted.`,
+          ephemeral: true
+        });
+      }
+
       case 'setup':
         const channel = interaction.options.getChannel('channel');
 

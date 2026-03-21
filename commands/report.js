@@ -51,8 +51,8 @@ module.exports = {
     if (!reportChannelId) {
       return await interaction.reply({
         content: lang === 'es' 
-          ? '❌ No se ha configurado un canal de reportes. Un administrador debe usar `/setreportchannel` primero.'
-          : '❌ No report channel has been configured. An administrator must use `/setreportchannel` first.',
+          ? '❌ No se ha configurado un canal de reportes. Un administrador debe usar `/config reportchannel` primero.'
+          : '❌ No report channel has been configured. An administrator must use `/config reportchannel` first.',
         ephemeral: true
       });
     }

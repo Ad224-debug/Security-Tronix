@@ -47,11 +47,8 @@ module.exports = {
       .addIntegerOption(o => o.setName('unlock_after').setDescription('Auto-unlock en minutos (default: 10)').setMinValue(1).setMaxValue(60))),
 
   async execute(interaction) {
-    console.log(`[config] execute called by ${interaction.user.tag}, sub: ${interaction.options.getSubcommand?.()}`);
     try {
-      console.log('[config] calling deferReply...');
       await interaction.deferReply({ ephemeral: true });
-      console.log('[config] deferReply OK');
       const sub = interaction.options.getSubcommand();
       const lang = interaction.client.getLanguage(interaction.guild.id);
       const L = (es, en) => lang === 'es' ? es : en;
