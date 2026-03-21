@@ -9,7 +9,7 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('vc')
     .setDescription('Comandos de voz')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
     .addSubcommand(s => s.setName('join').setDescription('Bot se une a tu canal de voz'))
     .addSubcommand(s => s.setName('leave').setDescription('Bot abandona el canal de voz'))
     .addSubcommand(s => s.setName('kick').setDescription('Expulsa a un usuario del canal de voz')
@@ -98,6 +98,7 @@ module.exports = {
 
     // ── BAN ──────────────────────────────────────────────────────────────────
     if (sub === 'ban') {
+      if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) return interaction.reply({ content: L('❌ Solo administradores pueden banear de voz.', '❌ Only administrators can voice ban.'), ephemeral: true });
       const usuario = interaction.options.getUser('user');
       const razon = interaction.options.getString('reason');
       let channel = interaction.options.getChannel('channel');

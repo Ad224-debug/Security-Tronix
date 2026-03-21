@@ -130,6 +130,9 @@ module.exports = {
 
     try {
       if (subcommand === 'create') {
+        if (!interaction.member.permissions.has(PermissionFlagsBits.ManageEvents) && !interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+          return await interaction.reply({ content: '❌ Necesitas el permiso **Gestionar Eventos** para crear eventos.', ephemeral: true });
+        }
         await handleCreate(interaction, eventManager, reminderScheduler);
       } else if (subcommand === 'edit') {
         await handleEdit(interaction, eventManager, reminderScheduler);

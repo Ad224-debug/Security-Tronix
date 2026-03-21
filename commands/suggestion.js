@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
 
@@ -76,6 +76,15 @@ module.exports = {
 
     if (fs.existsSync(suggestionsPath)) {
       suggestions = JSON.parse(fs.readFileSync(suggestionsPath, 'utf8'));
+    }
+
+    // Admin-only subcommands
+    const adminSubs = ['setup', 'approve', 'deny', 'list', 'view'];
+    if (adminSubs.includes(subcommand) && !interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+      return await interaction.reply({
+        content: lang === 'es' ? '❌ Solo administradores pueden usar este subcomando.' : '❌ Only administrators can use this subcommand.',
+        ephemeral: true
+      });
     }
 
     switch (subcommand) {

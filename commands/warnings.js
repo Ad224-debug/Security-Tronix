@@ -6,13 +6,17 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('warnings')
     .setDescription('Show warnings for a user')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
-    .addUserOption(o => o.setName('user').setDescription('User to check').setRequired(true)),
+    .addUserOption(o => o.setName('user').setDescription('User to check').setRequired(false)),
 
   async execute(interaction) {
     const lang = interaction.client.getLanguage(interaction.guild.id);
     const L = (es, en) => lang === 'es' ? es : en;
-    const usuario = interaction.options.getUser('user');
+    const usuario = interaction.options.getUser('user') || interaction.user;
+
+    // Users can only check their own warnings; mods can check anyone
+    if (usuario.id !== interaction.user.id && !interaction.member.permissions.has(PermissionFlagsBits.ModerateMembers)) {
+      return interaction.reply({ content: L('❌ Solo puedes ver tus propias advertencias.', '❌ You can only view your own warnings.'), ephemeral: true });
+    }
 
     const warningsPath = path.join(__dirname, '../warnings.json');
     const warnings = fs.existsSync(warningsPath) ? JSON.parse(fs.readFileSync(warningsPath, 'utf8')) : {};
