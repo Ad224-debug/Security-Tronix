@@ -10,8 +10,12 @@ module.exports = {
     .addSubcommand(s => s.setName('status').setDescription('Ver estado actual del anti-raid')),
 
   async execute(interaction) {
+    console.log(`[antiraid] execute called by ${interaction.user.tag}, guild: ${interaction.guild?.id}`);
     try {
+      if (!interaction.guild) return interaction.reply({ content: '❌ Solo en servidores.', ephemeral: true });
+      console.log('[antiraid] calling deferReply...');
       await interaction.deferReply({ ephemeral: true });
+      console.log('[antiraid] deferReply OK');
       const sub  = interaction.options.getSubcommand();
       const lang = interaction.client.getLanguage(interaction.guild.id);
       const L    = (es, en) => lang === 'es' ? es : en;

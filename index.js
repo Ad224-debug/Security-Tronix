@@ -1235,6 +1235,11 @@ client.on('interactionCreate', async (interaction) => {
 
   console.log(`[CMD] Ejecutando /${interaction.commandName} por ${interaction.user.tag} en ${interaction.guild.name}`);
 
+  // Extra debug for antiraid/config
+  if (['antiraid', 'config'].includes(interaction.commandName)) {
+    console.log(`[CMD DEBUG] ${interaction.commandName} - sub: ${interaction.options.getSubcommand?.()}, deferred: ${interaction.deferred}, replied: ${interaction.replied}`);
+  }
+
   // Verificar permisos personalizados del comando
   if (!hasCommandPermission(interaction.guild.id, interaction.commandName, interaction.member)) {
     console.warn(`[CMD] Permiso denegado para ${interaction.commandName} a ${interaction.user.tag}`);
