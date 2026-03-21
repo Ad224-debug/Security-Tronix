@@ -1,6 +1,7 @@
 const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
+const guildConfig = require('../guild-config');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -90,7 +91,8 @@ module.exports = {
     switch (subcommand) {
       case 'submit': {
         const suggestionText = interaction.options.getString('suggestion');
-        const suggestionChannelId = config.suggestionChannels?.[interaction.guild.id];
+        // Read from SQLite first, fallback to config.json
+        const suggestionChannelId = guildConfig.get(interaction.guild.id, 'suggestionChannel') || config.suggestionChannels?.[interaction.guild.id];
 
         if (!suggestionChannelId) {
           return await interaction.reply({
@@ -156,6 +158,7 @@ module.exports = {
 
         config.suggestionChannels[interaction.guild.id] = channel.id;
         fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+        guildConfig.set(interaction.guild.id, 'suggestionChannel', channel.id);
 
         await interaction.reply({
           embeds: [{

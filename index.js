@@ -22,6 +22,8 @@ const messageCache = new Map();
 
 client.commands = new Collection();
 
+const guildConfig = require('./guild-config');
+
 // ─── CONFIG CACHE ────────────────────────────────────────────────────────────
 // Lee config.json una vez y lo mantiene en memoria. Se invalida cuando se escribe.
 let _configCache = null;
@@ -53,12 +55,12 @@ function getLangData() {
 
 // Cargar configuración de prefijos
 function getPrefix(guildId) {
-  return getConfig().prefixes?.[guildId] || '!';
+  return guildConfig.get(guildId, 'prefix') || getConfig().prefixes?.[guildId] || '!';
 }
 
 // Cargar idioma del servidor
 function getLanguage(guildId) {
-  return getConfig().languages?.[guildId] || 'es';
+  return guildConfig.get(guildId, 'language') || getConfig().languages?.[guildId] || 'es';
 }
 
 // Obtener texto traducido
@@ -80,7 +82,7 @@ function getDeleteLogChannel(guildId) {
 
 // Obtener canal de notificaciones de boost
 function getBoostChannel(guildId) {
-  return getConfig().boostChannels?.[guildId] || null;
+  return guildConfig.get(guildId, 'boostChannel') || getConfig().boostChannels?.[guildId] || null;
 }
 
 // Verificar permisos personalizados de comando

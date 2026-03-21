@@ -69,12 +69,12 @@ module.exports = {
           config.modLogs[interaction.guild.id][type] = channel.id;
         }
         save();
+        guildConfig.set(interaction.guild.id, 'modLogs', config.modLogs[interaction.guild.id]);
         return interaction.editReply({ content: `✅ Canal de logs **${type}** configurado: ${channel}` });
       }
 
       if (sub === 'modlogs_view') {
-        if (!config.modLogs) config.modLogs = {};
-        const gl = config.modLogs[interaction.guild.id] || {};
+        const gl = guildConfig.get(interaction.guild.id, 'modLogs') || config.modLogs?.[interaction.guild.id] || {};
         const fmt = (id) => id ? `<#${id}>` : L('No configurado', 'Not configured');
         return interaction.editReply({ embeds: [new EmbedBuilder().setTitle(L('⚙️ Logs de Moderación','⚙️ Moderation Logs')).addFields({ name: '👢 Kicks', value: fmt(gl.kicks), inline: true }, { name: '🔨 Bans', value: fmt(gl.bans), inline: true }, { name: '⚠️ Warnings', value: fmt(gl.warnings), inline: true }, { name: '⏱️ Timeouts', value: fmt(gl.timeouts), inline: true }, { name: '🤖 Automod', value: fmt(gl.automod), inline: true }).setColor(0x5865F2).setTimestamp()] });
       }
@@ -85,6 +85,7 @@ module.exports = {
         if (!config.boostChannels) config.boostChannels = {};
         config.boostChannels[interaction.guild.id] = channel.id;
         save();
+        guildConfig.set(interaction.guild.id, 'boostChannel', channel.id);
         return interaction.editReply({ content: `✅ Canal de boost configurado: ${channel}` });
       }
 
@@ -105,6 +106,7 @@ module.exports = {
         if (!config.prefixes) config.prefixes = {};
         config.prefixes[interaction.guild.id] = prefix;
         save();
+        guildConfig.set(interaction.guild.id, 'prefix', prefix);
         return interaction.editReply({ embeds: [new EmbedBuilder().setTitle(L('✅ Prefijo Actualizado','✅ Prefix Updated')).setDescription(L(`Nuevo prefijo: \`${prefix}\``,`New prefix: \`${prefix}\``)).setColor(0x57F287).setTimestamp()] });
       }
 
@@ -114,6 +116,7 @@ module.exports = {
         if (!config.languages) config.languages = {};
         config.languages[interaction.guild.id] = newLang;
         save();
+        guildConfig.set(interaction.guild.id, 'language', newLang);
         const langName = newLang === 'es' ? 'Español 🇪🇸' : 'English 🇺🇸';
         return interaction.editReply({ embeds: [new EmbedBuilder().setTitle('✅ Language / Idioma').setDescription(`${newLang === 'es' ? 'Idioma cambiado a' : 'Language changed to'} **${langName}**`).setColor(0x57F287).setTimestamp()] });
       }
@@ -127,6 +130,7 @@ module.exports = {
         let warnConfig = fs.existsSync(warnConfigPath) ? JSON.parse(fs.readFileSync(warnConfigPath, 'utf8')) : {};
         warnConfig[interaction.guild.id] = { dmNotifications: dm, autoAction: action, autoActionThreshold: threshold };
         fs.writeFileSync(warnConfigPath, JSON.stringify(warnConfig, null, 2));
+        guildConfig.set(interaction.guild.id, 'warnSetup', { dmNotifications: dm, autoAction: action, autoActionThreshold: threshold });
         return interaction.editReply({ embeds: [new EmbedBuilder().setTitle(L('⚙️ Sistema de Advertencias','⚙️ Warning System')).addFields({ name: L('DM Notificaciones','DM Notifications'), value: dm ? '✅' : '❌', inline: true }, { name: L('Acción Auto','Auto Action'), value: action, inline: true }, { name: L('Umbral','Threshold'), value: `${threshold}`, inline: true }).setColor(0x5865F2).setTimestamp()] });
       }
 
@@ -148,6 +152,7 @@ module.exports = {
         const dataDir = path.join(__dirname, '../data');
         if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
         fs.writeFileSync(rb3Path, JSON.stringify(rb3Config, null, 2));
+        guildConfig.set(interaction.guild.id, 'rb3Config', rb3Config[interaction.guild.id]);
         return interaction.editReply({ content: `✅ RB3 actualizado` });
       }
 
@@ -160,9 +165,9 @@ module.exports = {
         if (!config.botPermissions) config.botPermissions = {};
         if (!config.botPermissions[interaction.guild.id]) config.botPermissions[interaction.guild.id] = { enabled: true, allowedUsers: [interaction.guild.ownerId] };
         const gc = config.botPermissions[interaction.guild.id];
-        if (action === 'add' && user) { if (!gc.allowedUsers.includes(user.id)) gc.allowedUsers.push(user.id); save(); return interaction.editReply({ content: `✅ ${user.tag} puede agregar bots.` }); }
-        if (action === 'remove' && user) { if (user.id === interaction.guild.ownerId) return interaction.editReply({ content: '❌ No puedes remover al dueño.' }); gc.allowedUsers = gc.allowedUsers.filter(id => id !== user.id); save(); return interaction.editReply({ content: `✅ ${user.tag} ya no puede agregar bots.` }); }
-        if (action === 'toggle' && enabled !== null) { gc.enabled = enabled; save(); return interaction.editReply({ content: `✅ Protección de bots ${enabled ? 'activada' : 'desactivada'}.` }); }
+        if (action === 'add' && user) { if (!gc.allowedUsers.includes(user.id)) gc.allowedUsers.push(user.id); save(); guildConfig.set(interaction.guild.id, 'botPermissions', gc); return interaction.editReply({ content: `✅ ${user.tag} puede agregar bots.` }); }
+        if (action === 'remove' && user) { if (user.id === interaction.guild.ownerId) return interaction.editReply({ content: '❌ No puedes remover al dueño.' }); gc.allowedUsers = gc.allowedUsers.filter(id => id !== user.id); save(); guildConfig.set(interaction.guild.id, 'botPermissions', gc); return interaction.editReply({ content: `✅ ${user.tag} ya no puede agregar bots.` }); }
+        if (action === 'toggle' && enabled !== null) { gc.enabled = enabled; save(); guildConfig.set(interaction.guild.id, 'botPermissions', gc); return interaction.editReply({ content: `✅ Protección de bots ${enabled ? 'activada' : 'desactivada'}.` }); }
         if (action === 'list') {
           const users = [];
           for (const id of gc.allowedUsers) { try { const u = await interaction.client.users.fetch(id); users.push(`${u.tag}${id === interaction.guild.ownerId ? ' 👑' : ''}`); } catch { users.push(id); } }
@@ -180,11 +185,11 @@ module.exports = {
         if (!config.commandPermissions[interaction.guild.id]) config.commandPermissions[interaction.guild.id] = {};
         if (!config.commandPermissions[interaction.guild.id][commandName]) config.commandPermissions[interaction.guild.id][commandName] = { users: [], roles: [] };
         const cp = config.commandPermissions[interaction.guild.id][commandName];
-        if (action === 'add_user' && user) { if (!cp.users.includes(user.id)) cp.users.push(user.id); save(); return interaction.editReply({ content: `✅ ${user.tag} puede usar \`/${commandName}\`.` }); }
-        if (action === 'add_role' && role) { if (!cp.roles.includes(role.id)) cp.roles.push(role.id); save(); return interaction.editReply({ content: `✅ ${role.name} puede usar \`/${commandName}\`.` }); }
-        if (action === 'remove_user' && user) { cp.users = cp.users.filter(id => id !== user.id); save(); return interaction.editReply({ content: `✅ Removido.` }); }
-        if (action === 'remove_role' && role) { cp.roles = cp.roles.filter(id => id !== role.id); save(); return interaction.editReply({ content: `✅ Removido.` }); }
-        if (action === 'clear') { config.commandPermissions[interaction.guild.id][commandName] = { users: [], roles: [] }; save(); return interaction.editReply({ content: `✅ Permisos de \`/${commandName}\` limpiados.` }); }
+        if (action === 'add_user' && user) { if (!cp.users.includes(user.id)) cp.users.push(user.id); save(); guildConfig.set(interaction.guild.id, 'cmdPermissions', config.commandPermissions[interaction.guild.id]); return interaction.editReply({ content: `✅ ${user.tag} puede usar \`/${commandName}\`.` }); }
+        if (action === 'add_role' && role) { if (!cp.roles.includes(role.id)) cp.roles.push(role.id); save(); guildConfig.set(interaction.guild.id, 'cmdPermissions', config.commandPermissions[interaction.guild.id]); return interaction.editReply({ content: `✅ ${role.name} puede usar \`/${commandName}\`.` }); }
+        if (action === 'remove_user' && user) { cp.users = cp.users.filter(id => id !== user.id); save(); guildConfig.set(interaction.guild.id, 'cmdPermissions', config.commandPermissions[interaction.guild.id]); return interaction.editReply({ content: `✅ Removido.` }); }
+        if (action === 'remove_role' && role) { cp.roles = cp.roles.filter(id => id !== role.id); save(); guildConfig.set(interaction.guild.id, 'cmdPermissions', config.commandPermissions[interaction.guild.id]); return interaction.editReply({ content: `✅ Removido.` }); }
+        if (action === 'clear') { config.commandPermissions[interaction.guild.id][commandName] = { users: [], roles: [] }; save(); guildConfig.set(interaction.guild.id, 'cmdPermissions', config.commandPermissions[interaction.guild.id]); return interaction.editReply({ content: `✅ Permisos de \`/${commandName}\` limpiados.` }); }
         if (action === 'view') {
           const users = cp.users.length > 0 ? cp.users.map(id => `<@${id}>`).join(', ') : 'Ninguno';
           const roles = cp.roles.length > 0 ? cp.roles.map(id => `<@&${id}>`).join(', ') : 'Ninguno';
@@ -213,6 +218,7 @@ module.exports = {
         if (unlockAfter !== null) ar.unlockAfter   = unlockAfter;
 
         save();
+        guildConfig.set(interaction.guild.id, 'antiRaidConfig', config.antiRaid[interaction.guild.id]);
 
         const arCfg = config.antiRaid[interaction.guild.id];
         return interaction.editReply({
@@ -239,11 +245,13 @@ module.exports = {
         if (disable) {
           delete config.joinCheckChannels[interaction.guild.id];
           save();
+          guildConfig.del(interaction.guild.id, 'joinCheckChannel');
           return interaction.editReply({ content: '✅ Sistema de reputación al unirse **desactivado**.' });
         }
         if (!channel) return interaction.editReply({ content: '❌ Debes indicar un canal o usar `disable: true`.' });
         config.joinCheckChannels[interaction.guild.id] = channel.id;
         save();
+        guildConfig.set(interaction.guild.id, 'joinCheckChannel', channel.id);
         return interaction.editReply({ embeds: [new EmbedBuilder().setTitle('✅ Join Reputation Check').setDescription(`Cuando alguien se una (o apruebe el formulario de acceso), se enviará un análisis de reputación en ${channel}.`).addFields({ name: '📋 Incluye', value: '• Edad de la cuenta\n• Avatar\n• Nombre sospechoso\n• Historial de warns/kicks/bans en este servidor\n• Nivel de riesgo (🟢 Bajo / 🟡 Medio / 🔴 Alto)' }).setColor(0x5865F2).setTimestamp()] });
       }
 

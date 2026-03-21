@@ -84,6 +84,9 @@ module.exports = {
           { name: '/info server', desc: L('Información del servidor', 'Server information') },
           { name: '/info bot', desc: L('Información del bot', 'Bot information') },
           { name: '/info role', desc: L('Información de un rol', 'Role information') },
+          { name: '/info members', desc: L('Estadísticas de miembros', 'Member statistics') },
+          { name: '/info invites', desc: L('Invitaciones del servidor', 'Server invites') },
+          { name: '/info ping', desc: L('Latencia del bot', 'Bot latency') },
           { name: '/avatar', desc: L('Ver avatar de un usuario', 'View user avatar') },
           { name: '/messageview', desc: L('Ver historial de mensajes de un usuario', 'View user message history') },
           { name: '/suggestion list', desc: L('Listar sugerencias pendientes', 'List pending suggestions') },
@@ -115,11 +118,10 @@ module.exports = {
           { name: '/fun cry', desc: L('Llorar', 'Cry') },
           { name: '/fun poll', desc: L('Crear encuesta', 'Create poll') },
           { name: '/fun afk', desc: L('Establecer estado AFK', 'Set AFK status') },
-          { name: '/fun announce', desc: L('Hacer un anuncio', 'Make an announcement') },
           { name: '/say', desc: L('Hacer que el bot envíe un mensaje', 'Make the bot send a message') },
           { name: '/embed', desc: L('Crear embed personalizado', 'Create custom embed') },
           { name: '/hello', desc: L('El bot te saluda', 'The bot greets you') },
-          { name: '/suggestion', desc: L('Enviar sugerencia al servidor', 'Submit a suggestion') },
+          { name: '/suggestion submit', desc: L('Enviar sugerencia al servidor', 'Submit a suggestion') },
         ]
       },
       voice: {
@@ -143,10 +145,7 @@ module.exports = {
           { name: '/event view', desc: L('Ver detalles de un evento', 'View event details') },
           { name: '/event edit', desc: L('Editar evento existente', 'Edit existing event') },
           { name: '/event delete', desc: L('Eliminar evento', 'Delete event') },
-          { name: '/event cancel', desc: L('Cancelar evento', 'Cancel event') },
           { name: '/event stats', desc: L('Estadísticas de eventos', 'Event statistics') },
-          { name: '/event rsvp', desc: L('Confirmar asistencia a evento', 'RSVP to event') },
-          { name: '/event waitlist', desc: L('Ver lista de espera', 'View waitlist') },
         ]
       },
       bot: {
@@ -155,7 +154,8 @@ module.exports = {
         commands: [
           { name: '/admin clear', desc: L('Limpiar mensajes del canal', 'Clear channel messages') },
           { name: '/admin dm', desc: L('Enviar DM a usuario(s)', 'Send DM to user(s)') },
-          { name: '/admin purgebot', desc: L('Eliminar mensajes de bots', 'Delete bot messages') },
+          { name: '/admin purge', desc: L('Eliminar mensajes de bots', 'Delete bot messages') },
+          { name: '/admin announce', desc: L('Hacer un anuncio', 'Make an announcement') },
           { name: '/admin backup', desc: L('Crear/restaurar backup de configuración', 'Create/restore config backup') },
           { name: '/setbotname', desc: L('Cambiar nombre del bot', 'Change bot name') },
           { name: '/setbotavatar', desc: L('Cambiar avatar del bot', 'Change bot avatar') },
