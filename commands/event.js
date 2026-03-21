@@ -113,7 +113,8 @@ module.exports = {
   async execute(interaction) {
     const subcommand = interaction.options.getSubcommand();
 
-    // Cargar managers
+    // Usar managers globales del cliente (inicializados en index.js)
+    // Si no están disponibles aún, crear instancias locales como fallback
     const EventManager = require('../events/managers/EventManager');
     const RSVPManager = require('../events/managers/RSVPManager');
     const RoleManager = require('../events/managers/RoleManager');
@@ -121,11 +122,11 @@ module.exports = {
     const StatisticsTracker = require('../events/managers/StatisticsTracker');
     const { buildEventEmbed, buildRSVPButtons } = require('../events/utils/embedBuilder');
 
-    const eventManager = new EventManager();
-    const rsvpManager = new RSVPManager(eventManager);
-    const roleManager = new RoleManager(interaction.client);
-    const reminderScheduler = new ReminderScheduler(interaction.client, eventManager);
-    const statsTracker = new StatisticsTracker(eventManager);
+    const eventManager = interaction.client.eventManager || new EventManager();
+    const rsvpManager = interaction.client.rsvpManager || new RSVPManager(eventManager);
+    const roleManager = interaction.client.roleManager || new RoleManager(interaction.client);
+    const reminderScheduler = interaction.client.reminderScheduler || new ReminderScheduler(interaction.client, eventManager);
+    const statsTracker = interaction.client.statsTracker || new StatisticsTracker(eventManager);
 
     try {
       if (subcommand === 'create') {

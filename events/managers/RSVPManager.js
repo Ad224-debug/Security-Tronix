@@ -44,9 +44,9 @@ class RSVPManager {
       this.eventManager.updateEvent(eventId, { attendees: event.attendees });
       
       // Promover del waitlist si hay espacio
-      this.promoteFromWaitlist(eventId);
+      const promoted = this.promoteFromWaitlist(eventId);
       
-      return { success: true, status: 'removed', waitlistPosition: null };
+      return { success: true, status: 'removed', waitlistPosition: null, promoted: promoted || null };
     }
 
     // Verificar capacidad para 'attending'

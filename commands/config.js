@@ -59,6 +59,7 @@ module.exports = {
       .addIntegerOption(o => o.setName('unlock_after').setDescription('Auto-unlock en minutos (default: 10)').setMinValue(1).setMaxValue(60))),
 
   async execute(interaction) {
+    try {
     const sub = interaction.options.getSubcommand();
     const lang = interaction.client.getLanguage(interaction.guild.id);
     const L = (es, en) => lang === 'es' ? es : en;
@@ -201,42 +202,49 @@ module.exports = {
 
     // ── ANTIRAID ─────────────────────────────────────────────────────────────
     if (sub === 'antiraid') {
-      const enabled     = interaction.options.getBoolean('enabled');
-      const threshold   = interaction.options.getInteger('threshold');
-      const window      = interaction.options.getInteger('window');
-      const action      = interaction.options.getString('action');
-      const minAge      = interaction.options.getInteger('min_age');
-      const unlockAfter = interaction.options.getInteger('unlock_after');
+      try {
+        const enabled     = interaction.options.getBoolean('enabled');
+        const threshold   = interaction.options.getInteger('threshold');
+        const window      = interaction.options.getInteger('window');
+        const action      = interaction.options.getString('action');
+        const minAge      = interaction.options.getInteger('min_age');
+        const unlockAfter = interaction.options.getInteger('unlock_after');
 
-      if (!config.antiRaid) config.antiRaid = {};
-      if (!config.antiRaid[interaction.guild.id]) config.antiRaid[interaction.guild.id] = {};
-      const ar = config.antiRaid[interaction.guild.id];
+        if (!config.antiRaid) config.antiRaid = {};
+        if (!config.antiRaid[interaction.guild.id]) config.antiRaid[interaction.guild.id] = {};
+        const ar = config.antiRaid[interaction.guild.id];
 
-      ar.enabled = enabled;
-      if (threshold   !== null) ar.threshold   = threshold;
-      if (window      !== null) ar.windowMs     = window * 1000;
-      if (action      !== null) ar.action       = action;
-      if (minAge      !== null) ar.minAccountAge = minAge;
-      if (unlockAfter !== null) ar.unlockAfter  = unlockAfter;
+        ar.enabled = enabled;
+        if (threshold   !== null) ar.threshold   = threshold;
+        if (window      !== null) ar.windowMs     = window * 1000;
+        if (action      !== null) ar.action       = action;
+        if (minAge      !== null) ar.minAccountAge = minAge;
+        if (unlockAfter !== null) ar.unlockAfter  = unlockAfter;
 
-      save();
+        save();
 
-      const arCfg = config.antiRaid[interaction.guild.id];
-      return interaction.reply({
-        embeds: [new EmbedBuilder()
-          .setTitle(L('⚙️ Anti-Raid Configurado', '⚙️ Anti-Raid Configured'))
-          .setColor(enabled ? 0x57F287 : 0xED4245)
-          .addFields(
-            { name: L('Estado', 'Status'), value: enabled ? '✅ Activo' : '❌ Inactivo', inline: true },
-            { name: L('Umbral', 'Threshold'), value: `${arCfg.threshold ?? 10} joins`, inline: true },
-            { name: L('Ventana', 'Window'), value: `${(arCfg.windowMs ?? 30000) / 1000}s`, inline: true },
-            { name: L('Acción', 'Action'), value: arCfg.action ?? 'lockdown', inline: true },
-            { name: L('Edad mín. cuenta', 'Min account age'), value: `${arCfg.minAccountAge ?? 7} días`, inline: true },
-            { name: L('Auto-unlock', 'Auto-unlock'), value: `${arCfg.unlockAfter ?? 10} min`, inline: true },
-          )
-          .setTimestamp()],
-        ephemeral: true
-      });
+        const arCfg = config.antiRaid[interaction.guild.id];
+        return interaction.reply({
+          embeds: [new EmbedBuilder()
+            .setTitle(L('⚙️ Anti-Raid Configurado', '⚙️ Anti-Raid Configured'))
+            .setColor(enabled ? 0x57F287 : 0xED4245)
+            .addFields(
+              { name: L('Estado', 'Status'), value: enabled ? '✅ Activo' : '❌ Inactivo', inline: true },
+              { name: L('Umbral', 'Threshold'), value: `${arCfg.threshold ?? 10} joins`, inline: true },
+              { name: L('Ventana', 'Window'), value: `${(arCfg.windowMs ?? 30000) / 1000}s`, inline: true },
+              { name: L('Acción', 'Action'), value: arCfg.action ?? 'lockdown', inline: true },
+              { name: L('Edad mín. cuenta', 'Min account age'), value: `${arCfg.minAccountAge ?? 7} días`, inline: true },
+              { name: L('Auto-unlock', 'Auto-unlock'), value: `${arCfg.unlockAfter ?? 10} min`, inline: true },
+            )
+            .setTimestamp()],
+          ephemeral: true
+        });
+      } catch (err) {
+        console.error('[config antiraid] Error:', err);
+        const msg = { content: `❌ Error interno: \`${err.message}\``, ephemeral: true };
+        if (interaction.replied || interaction.deferred) return interaction.followUp(msg);
+        return interaction.reply(msg);
+      }
     }
 
     // ── JOINCHECK ────────────────────────────────────────────────────────────
@@ -253,6 +261,12 @@ module.exports = {
       config.joinCheckChannels[interaction.guild.id] = channel.id;
       save();
       return interaction.reply({ embeds: [new EmbedBuilder().setTitle('✅ Join Reputation Check').setDescription(`Cuando alguien se una (o apruebe el formulario de acceso), se enviará un análisis de reputación en ${channel}.`).addFields({ name: '📋 Incluye', value: '• Edad de la cuenta\n• Avatar\n• Nombre sospechoso\n• Historial de warns/kicks/bans en este servidor\n• Nivel de riesgo (🟢 Bajo / 🟡 Medio / 🔴 Alto)' }).setColor(0x5865F2).setTimestamp()], ephemeral: true });
+    }
+    } catch (err) {
+      console.error('[config] Error inesperado:', err);
+      const msg = { content: `❌ Error interno: \`${err.message}\``, ephemeral: true };
+      if (interaction.replied || interaction.deferred) return interaction.followUp(msg);
+      return interaction.reply(msg);
     }
   }
 };

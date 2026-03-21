@@ -10,43 +10,49 @@ module.exports = {
     .addSubcommand(s => s.setName('status').setDescription('Ver estado actual del anti-raid')),
 
   async execute(interaction) {
-    const sub  = interaction.options.getSubcommand();
-    const lang = interaction.client.getLanguage(interaction.guild.id);
-    const L    = (es, en) => lang === 'es' ? es : en;
-
-    const sendLog = (guild, embed) => interaction.client.sendLog(guild, embed);
-
-    if (sub === 'unlock') {
-      const state = getRaidState(interaction.guild.id);
-      if (!state.active) {
-        return interaction.reply({ content: L('ℹ️ No hay ningún lockdown activo.', 'ℹ️ No active lockdown.'), ephemeral: true });
-      }
+    try {
       await interaction.deferReply({ ephemeral: true });
-      const ok = await unlockGuild(interaction.guild, sendLog, 'manual');
-      return interaction.editReply({ content: ok
-        ? L('✅ Lockdown levantado correctamente.', '✅ Lockdown lifted successfully.')
-        : L('❌ No se pudo levantar el lockdown.', '❌ Could not lift the lockdown.')
-      });
-    }
+      const sub  = interaction.options.getSubcommand();
+      const lang = interaction.client.getLanguage(interaction.guild.id);
+      const L    = (es, en) => lang === 'es' ? es : en;
+      const sendLog = (guild, embed) => interaction.client.sendLog(guild, embed);
 
-    if (sub === 'status') {
-      const state = getRaidState(interaction.guild.id);
-      const cfg   = getAntiRaidConfig(interaction.guild.id);
+      if (sub === 'unlock') {
+        const state = getRaidState(interaction.guild.id);
+        if (!state.active) {
+          return interaction.editReply({ content: L('ℹ️ No hay ningún lockdown activo.', 'ℹ️ No active lockdown.') });
+        }
+        const ok = await unlockGuild(interaction.guild, sendLog, 'manual');
+        return interaction.editReply({ content: ok
+          ? L('✅ Lockdown levantado correctamente.', '✅ Lockdown lifted successfully.')
+          : L('❌ No se pudo levantar el lockdown.', '❌ Could not lift the lockdown.')
+        });
+      }
 
-      const embed = new EmbedBuilder()
-        .setTitle(L('🛡️ Estado Anti-Raid', '🛡️ Anti-Raid Status'))
-        .setColor(state.active ? 0xFF0000 : cfg.enabled ? 0x57F287 : 0x99AAB5)
-        .addFields(
-          { name: L('Sistema', 'System'), value: cfg.enabled ? '✅ Activo' : '❌ Inactivo', inline: true },
-          { name: L('Lockdown', 'Lockdown'), value: state.active ? '🔒 En curso' : '🔓 Sin lockdown', inline: true },
-          { name: L('Canales bloqueados', 'Locked channels'), value: `${state.lockedChannels.length}`, inline: true },
-          { name: L('Umbral', 'Threshold'), value: `${cfg.threshold} joins / ${cfg.windowMs / 1000}s`, inline: true },
-          { name: L('Acción', 'Action'), value: cfg.action, inline: true },
-          { name: L('Edad mín. cuenta', 'Min account age'), value: `${cfg.minAccountAge} días`, inline: true },
-        )
-        .setTimestamp();
+      if (sub === 'status') {
+        const state = getRaidState(interaction.guild.id);
+        const cfg   = getAntiRaidConfig(interaction.guild.id);
 
-      return interaction.reply({ embeds: [embed], ephemeral: true });
+        const embed = new EmbedBuilder()
+          .setTitle(L('🛡️ Estado Anti-Raid', '🛡️ Anti-Raid Status'))
+          .setColor(state.active ? 0xFF0000 : cfg.enabled ? 0x57F287 : 0x99AAB5)
+          .addFields(
+            { name: L('Sistema', 'System'), value: cfg.enabled ? '✅ Activo' : '❌ Inactivo', inline: true },
+            { name: L('Lockdown', 'Lockdown'), value: state.active ? '🔒 En curso' : '🔓 Sin lockdown', inline: true },
+            { name: L('Canales bloqueados', 'Locked channels'), value: `${state.lockedChannels.length}`, inline: true },
+            { name: L('Umbral', 'Threshold'), value: `${cfg.threshold} joins / ${cfg.windowMs / 1000}s`, inline: true },
+            { name: L('Acción', 'Action'), value: cfg.action, inline: true },
+            { name: L('Edad mín. cuenta', 'Min account age'), value: `${cfg.minAccountAge} días`, inline: true },
+          )
+          .setTimestamp();
+
+        return interaction.editReply({ embeds: [embed] });
+      }
+    } catch (err) {
+      console.error('[antiraid] Error:', err);
+      const msg = { content: `❌ Error interno: \`${err.message}\`` };
+      if (interaction.replied || interaction.deferred) return interaction.editReply(msg);
+      return interaction.reply({ ...msg, ephemeral: true });
     }
   }
 };

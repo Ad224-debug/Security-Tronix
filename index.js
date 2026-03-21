@@ -150,6 +150,7 @@ for (const file of commandFiles) {
       continue;
     }
     client.commands.set(command.data.name, command);
+    console.log(`[LOAD] Comando cargado: ${command.data.name} (${file})`);
     
     // Inicializar tracking de mensajes si existe
     if (command.setupMessageTracking) {
@@ -187,6 +188,13 @@ client.once('ready', () => {
     reminderScheduler = new ReminderScheduler(client, eventManager);
     statsTracker = new StatisticsTracker(eventManager);
 
+    // Exponer managers en el cliente para que los comandos los reutilicen
+    client.eventManager = eventManager;
+    client.rsvpManager = rsvpManager;
+    client.roleManager = roleManager;
+    client.reminderScheduler = reminderScheduler;
+    client.statsTracker = statsTracker;
+
     // Record attendance stats when an event completes
     eventManager.onEventCompleted = (event) => {
       try {
@@ -206,67 +214,95 @@ client.once('ready', () => {
 });
 
 function setupCronJobs() {
+  const cronJobs = {};
+  const cronHealth = { lastRun: {}, failures: {} };
+
+  function scheduleSafe(name, pattern, fn) {
+    const job = cron.schedule(pattern, async () => {
+      try {
+        await fn();
+        cronHealth.lastRun[name] = Date.now();
+        cronHealth.failures[name] = 0;
+      } catch (error) {
+        cronHealth.failures[name] = (cronHealth.failures[name] || 0) + 1;
+        console.error(`Error in cron job [${name}]:`, error);
+        if (cronHealth.failures[name] >= 3) {
+          console.error(`⚠️ Cron job [${name}] has failed ${cronHealth.failures[name]} times in a row`);
+        }
+      }
+    });
+    cronJobs[name] = job;
+    return job;
+  }
+
   // Verificar y enviar recordatorios cada 5 minutos
-  cron.schedule('*/5 * * * *', async () => {
-    try {
-      await reminderScheduler.checkAndSendReminders();
-    } catch (error) {
-      console.error('Error in reminder cron job:', error);
-    }
+  scheduleSafe('reminders', '*/5 * * * *', async () => {
+    await reminderScheduler.checkAndSendReminders();
   });
 
   // Actualizar estados de eventos cada 10 minutos
-  cron.schedule('*/10 * * * *', () => {
-    try {
-      eventManager.checkAndUpdateEventStatuses();
-    } catch (error) {
-      console.error('Error in status update cron job:', error);
-    }
+  scheduleSafe('statusUpdate', '*/10 * * * *', async () => {
+    eventManager.checkAndUpdateEventStatuses();
   });
 
   // Generar eventos recurrentes diariamente a medianoche
-  cron.schedule('0 0 * * *', async () => {
-    try {
-      await eventManager.generateRecurringEvents();
-    } catch (error) {
-      console.error('Error in recurring events cron job:', error);
-    }
+  scheduleSafe('recurringEvents', '0 0 * * *', async () => {
+    await eventManager.generateRecurringEvents();
   });
 
   // Limpieza diaria a las 2 AM
-  cron.schedule('0 2 * * *', () => {
-    try {
-      reminderScheduler.cleanupOldReminders();
-      statsTracker.cleanupOldStats();
-      eventManager.cleanupOldEvents();
-      console.log('✅ Daily cleanup completed');
-    } catch (error) {
-      console.error('Error in cleanup cron job:', error);
-    }
+  scheduleSafe('cleanup', '0 2 * * *', async () => {
+    reminderScheduler.cleanupOldReminders();
+    statsTracker.cleanupOldStats();
+    eventManager.cleanupOldEvents();
+    console.log('✅ Daily cleanup completed');
   });
 
   // Backup automático diario a las 3 AM
-  cron.schedule('0 3 * * *', async () => {
-    try {
-      const BackupSystem = require('./backup-system');
-      const backupSystem = new BackupSystem(client);
-      
-      const result = await backupSystem.createBackup();
-      if (result.success) {
-        console.log(`✅ Automatic backup created: ${result.backupName}`);
-        
-        // Limpiar backups antiguos (más de 30 días)
-        const cleanup = backupSystem.cleanupOldBackups(30);
-        if (cleanup.deleted > 0) {
-          console.log(`🗑️ Cleaned up ${cleanup.deleted} old backups`);
-        }
-      } else {
-        console.error('❌ Automatic backup failed:', result.error);
+  scheduleSafe('backup', '0 3 * * *', async () => {
+    const BackupSystem = require('./backup-system');
+    const backupSystem = new BackupSystem(client);
+    
+    const result = await backupSystem.createBackup();
+    if (result.success) {
+      console.log(`✅ Automatic backup created: ${result.backupName}`);
+      const cleanup = backupSystem.cleanupOldBackups(30);
+      if (cleanup.deleted > 0) {
+        console.log(`🗑️ Cleaned up ${cleanup.deleted} old backups`);
       }
-    } catch (error) {
-      console.error('Error in backup cron job:', error);
+    } else {
+      console.error('❌ Automatic backup failed:', result.error);
     }
   });
+
+  // Health check cada 15 minutos
+  scheduleSafe('healthCheck', '*/15 * * * *', async () => {
+    const now = Date.now();
+    const staleThreshold = 20 * 60 * 1000; // 20 minutos
+    for (const [name, lastRun] of Object.entries(cronHealth.lastRun)) {
+      if (now - lastRun > staleThreshold && ['reminders', 'statusUpdate'].includes(name)) {
+        console.warn(`⚠️ Cron job [${name}] hasn't run in over 20 minutes (last: ${new Date(lastRun).toISOString()})`);
+      }
+    }
+  });
+
+  // Graceful shutdown: guardar datos al cerrar
+  const shutdown = async (signal) => {
+    console.log(`\n🛑 Received ${signal}, shutting down gracefully...`);
+    try {
+      // Detener todos los cron jobs
+      Object.values(cronJobs).forEach(job => job.stop());
+      // Guardar estado de eventos
+      if (eventManager) eventManager.saveEvents();
+      console.log('✅ Data saved. Goodbye!');
+    } catch (err) {
+      console.error('Error during shutdown:', err);
+    }
+    process.exit(0);
+  };
+
+  process.once('SIGINT', () => shutdown('SIGINT'));
+  process.once('SIGTERM', () => shutdown('SIGTERM'));
 
   console.log('✅ Cron jobs configured');
 }
@@ -1008,9 +1044,12 @@ client.on('interactionCreate', async (interaction) => {
   // Manejar botones de RSVP
   if (interaction.isButton() && interaction.customId.startsWith('event_rsvp_')) {
     try {
-      const parts = interaction.customId.split('_');
-      const eventId = parts[2];
-      const status = parts[3];
+      // Format: event_rsvp_<eventId>_<status>
+      // eventId is a UUID (uses hyphens, not underscores), status can be "attending", "maybe", "not_attending"
+      const withoutPrefix = interaction.customId.slice('event_rsvp_'.length); // "<eventId>_<status>"
+      // UUID is 36 chars (8-4-4-4-12)
+      const eventId = withoutPrefix.slice(0, 36);
+      const status = withoutPrefix.slice(37); // skip the underscore after UUID
 
       if (!eventManager || !rsvpManager || !roleManager) {
         return await interaction.reply({
@@ -1073,28 +1112,28 @@ client.on('interactionCreate', async (interaction) => {
         ephemeral: true
       });
 
-      // Si alguien fue promovido del waitlist, notificarle
-      if (status === 'not_attending') {
-        const promoted = rsvpManager.moveFromWaitlist(eventId);
-        if (promoted) {
-          try {
-            const user = await client.users.fetch(promoted.userId);
-            const notifMsg = lang === 'en'
-              ? `🎉 Great news! A spot opened up for **${event.title}**. You've been moved from the waitlist to confirmed attendees!`
-              : `🎉 ¡Buenas noticias! Se liberó un lugar para **${event.title}**. ¡Has sido movido de la lista de espera a confirmados!`;
-            
-            await user.send(notifMsg);
-            
-            // Asignar rol al promovido
-            if (event.roleId) {
-              await roleManager.assignEventRole(interaction.guild, promoted.userId, event.roleId);
-            }
-            
-            // Actualizar embed nuevamente
-            await updateEventEmbed(client, eventManager.getEvent(eventId));
-          } catch (error) {
-            console.error('Error notifying promoted user:', error);
+      // Si alguien fue promovido del waitlist (ya lo hace handleRSVP internamente),
+      // notificarle y asignarle el rol
+      if (status === 'not_attending' && result.promoted) {
+        try {
+          const user = await client.users.fetch(result.promoted.userId);
+          const notifMsg = lang === 'en'
+            ? `🎉 Great news! A spot opened up for **${event.title}**. You've been moved from the waitlist to confirmed attendees!`
+            : `🎉 ¡Buenas noticias! Se liberó un lugar para **${event.title}**. ¡Has sido movido de la lista de espera a confirmados!`;
+          
+          await user.send(notifMsg).catch(() => {}); // DM puede estar desactivado
+          
+          // Asignar rol al promovido
+          if (event.roleId) {
+            await roleManager.assignEventRole(interaction.guild, result.promoted.userId, event.roleId).catch(err => {
+              console.error('Error assigning role to promoted user:', err);
+            });
           }
+          
+          // Actualizar embed con el nuevo estado
+          await updateEventEmbed(client, eventManager.getEvent(eventId));
+        } catch (error) {
+          console.error('Error notifying promoted user:', error);
         }
       }
 
@@ -1189,10 +1228,16 @@ client.on('interactionCreate', async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
 
   const command = client.commands.get(interaction.commandName);
-  if (!command) return;
+  if (!command) {
+    console.warn(`[CMD] Comando no encontrado: ${interaction.commandName}`);
+    return;
+  }
+
+  console.log(`[CMD] Ejecutando /${interaction.commandName} por ${interaction.user.tag} en ${interaction.guild.name}`);
 
   // Verificar permisos personalizados del comando
   if (!hasCommandPermission(interaction.guild.id, interaction.commandName, interaction.member)) {
+    console.warn(`[CMD] Permiso denegado para ${interaction.commandName} a ${interaction.user.tag}`);
     return await interaction.reply({
       content: getText(interaction.guild.id, 'cmd_perm_denied'),
       ephemeral: true
@@ -1202,7 +1247,7 @@ client.on('interactionCreate', async (interaction) => {
   try {
     await command.execute(interaction);
   } catch (error) {
-    console.error(error);
+    console.error(`[CMD ERROR] /${interaction.commandName}:`, error);
     const errorMessage = {
       content: '❌ Hubo un error al ejecutar este comando.',
       ephemeral: true

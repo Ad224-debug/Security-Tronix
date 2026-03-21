@@ -321,8 +321,11 @@ class EventManager {
       throw new Error('Evento no encontrado');
     }
 
-    // Validar actualizaciones
+    // Solo validar startTime si se está actualizando explícitamente
     const updatedEvent = { ...event, ...updates };
+    if (!('startTime' in updates)) {
+      delete updatedEvent.startTime; // evitar que la validación rechace el startTime original
+    }
     const errors = this.validateEventData(updatedEvent);
     if (errors.length > 0) {
       throw new Error(errors.join(', '));
@@ -393,8 +396,11 @@ class EventManager {
           updated++;
         } else if (event.status === 'ongoing' && event.endTime && event.endTime <= now) {
           this.transitionEventStatus(id, 'completed');
-          // Notify stats tracker if available
-          if (this.onEventCompleted) this.onEventCompleted(event);
+          // Notify stats tracker with updated event
+          if (this.onEventCompleted) {
+            const completedEvent = this.getEvent(id);
+            this.onEventCompleted(completedEvent || event);
+          }
           updated++;
         }
       } catch (error) {

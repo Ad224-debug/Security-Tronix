@@ -1,65 +1,46 @@
-const { PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
 
 module.exports = {
-  data: {
-    name: 'unmute',
-    description: 'Unmutes a user in this channel',
-    options: [
-      {
-        name: 'user',
-        description: 'The user you want to unmute',
-        type: 6, // USER type
-        required: true,
-      },
-    ],
-  },
+  data: new SlashCommandBuilder()
+    .setName('unmute')
+    .setDescription('Unmute a user in this channel')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
+    .addUserOption(o => o.setName('user').setDescription('User to unmute').setRequired(true)),
+
   async execute(interaction) {
-    const getText = (key) => interaction.client.getText(interaction.guild.id, key);
-
-    if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
-      return await interaction.reply({
-        content: getText('admin_only'),
-        ephemeral: true
-      });
-    }
-
+    const lang = interaction.client.getLanguage(interaction.guild.id);
+    const L = (es, en) => lang === 'es' ? es : en;
     const usuario = interaction.options.getUser('user');
-    const miembro = interaction.guild.members.cache.get(usuario.id);
 
+    const miembro = await interaction.guild.members.fetch(usuario.id).catch(() => null);
     if (!miembro) {
-      return await interaction.reply({
-        content: '❌ ' + (getText('admin_only').includes('Solo') ? 'No se pudo encontrar ese usuario en el servidor.' : 'Could not find that user on the server.'),
-        ephemeral: true
-      });
+      return interaction.reply({ content: L('❌ No se encontró ese usuario.', '❌ User not found.'), ephemeral: true });
     }
 
     try {
-      await interaction.channel.permissionOverwrites.delete(miembro);
+      // Remover overwrite de canal
+      await interaction.channel.permissionOverwrites.delete(miembro).catch(() => {});
 
-      const mutedRoleId = '1478237207885119672';
-      const mutedRole = interaction.guild.roles.cache.get(mutedRoleId);
-      
-      if (mutedRole && miembro.roles.cache.has(mutedRoleId)) {
-        await miembro.roles.remove(mutedRole);
+      // Remover rol "Muted" si existe
+      const mutedRole = interaction.guild.roles.cache.find(r => r.name.toLowerCase() === 'muted');
+      if (mutedRole && miembro.roles.cache.has(mutedRole.id)) {
+        await miembro.roles.remove(mutedRole).catch(() => {});
       }
 
       await interaction.reply({
         embeds: [{
-          title: getText('user_unmuted'),
-          description: `${usuario} ${getText('user_unmuted_desc')}`,
+          title: L('🔊 Usuario Desmuteado', '🔊 User Unmuted'),
+          description: L(`${usuario} puede volver a escribir en este canal.`, `${usuario} can write in this channel again.`),
           fields: [
-            { name: getText('moderator'), value: `${interaction.user}` },
+            { name: L('Moderador', 'Moderator'), value: `${interaction.user}`, inline: true },
           ],
           color: 0x57F287,
           timestamp: new Date(),
-        }]
+        }],
       });
     } catch (error) {
-      console.error('Error en desmutear:', error);
-      await interaction.reply({
-        content: getText('error'),
-        ephemeral: true
-      });
+      console.error('Error en unmute:', error);
+      await interaction.reply({ content: '❌ Error al desmutear al usuario.', ephemeral: true });
     }
   },
 };
