@@ -74,14 +74,22 @@ module.exports = {
               }
             } catch { /* skip */ }
           }
-          result = { geo, abuseScore, abuseReports, abuseLastReport, hasAbuseKey: !!abuseKey };
+
+          // ── AlienVault OTX + ThreatFox (paralelo, sin key) ───────────────
+          const { _queryOTX_IP, _queryThreatFox } = require('../security-systems');
+          const [otxData, tfData] = await Promise.all([
+            _queryOTX_IP(ip),
+            _queryThreatFox(ip)
+          ]);
+
+          result = { geo, abuseScore, abuseReports, abuseLastReport, hasAbuseKey: !!abuseKey, otxData, tfData };
           cache.set(cacheKey, result, 6 * 60 * 60 * 1000);
         }
 
-        const { geo, abuseScore, abuseReports, abuseLastReport, hasAbuseKey } = result;
-        const isRisky = geo.proxy || geo.hosting || (abuseScore !== null && abuseScore >= 25);
-        const color = abuseScore >= 75 ? 0xED4245 : isRisky ? 0xFFA500 : 0x57F287;
-        const riskLabel = abuseScore >= 75 ? '🔴 ALTO' : isRisky ? '🟡 MEDIO' : '🟢 BAJO';
+        const { geo, abuseScore, abuseReports, abuseLastReport, hasAbuseKey, otxData, tfData } = result;
+        const isRisky = geo.proxy || geo.hosting || (abuseScore !== null && abuseScore >= 25) || otxData?.malicious || tfData?.found;
+        const color = abuseScore >= 75 || tfData?.found ? 0xED4245 : isRisky ? 0xFFA500 : 0x57F287;
+        const riskLabel = abuseScore >= 75 || tfData?.found ? '🔴 ALTO' : isRisky ? '🟡 MEDIO' : '🟢 BAJO';
 
         const embed = new EmbedBuilder()
           .setTitle(`🌐 IP: ${ip}`)
@@ -106,7 +114,29 @@ module.exports = {
           embed.addFields({ name: '🛡️ AbuseIPDB', value: '⚠️ Sin API key (`ABUSEIPDB_KEY`)', inline: false });
         }
 
-        embed.setFooter({ text: `ip-api.com • AbuseIPDB${fromCache ? ' • 📦 Caché' : ''}` }).setTimestamp();
+        // AlienVault OTX
+        if (otxData) {
+          embed.addFields({
+            name: `🔭 AlienVault OTX — ${otxData.pulses} pulse(s)`,
+            value: otxData.malicious
+              ? `⚠️ Encontrado en ${otxData.pulses} campaña(s)\n${otxData.tags.length ? otxData.tags.map(t => `• ${t}`).join('\n') : ''}`
+              : '✅ Sin amenazas conocidas',
+            inline: false
+          });
+        }
+
+        // ThreatFox
+        if (tfData?.found) {
+          embed.addFields({
+            name: '🦊 ThreatFox — IoC detectado',
+            value: `🦠 **Malware:** ${tfData.malwareFamily}\n🎯 **Tipo:** ${tfData.threatType}\n📊 **Confianza:** ${tfData.confidence}%`,
+            inline: false
+          });
+        } else if (tfData && !tfData.found) {
+          embed.addFields({ name: '🦊 ThreatFox', value: '✅ Sin IoCs conocidos', inline: true });
+        }
+
+        embed.setFooter({ text: `ip-api.com • AbuseIPDB • OTX • ThreatFox${fromCache ? ' • 📦 Caché' : ''}` }).setTimestamp();
         return interaction.editReply({ embeds: [embed] });
       } catch (err) {
         console.error('[ipinfo]', err);
@@ -184,6 +214,22 @@ module.exports = {
             } catch { /* skip */ }
           }
 
+          // ── AlienVault OTX + ThreatFox (paralelo, sin key) ───────────────
+          const { _queryOTX_Domain, _queryThreatFox } = require('../security-systems');
+          const [otxData, tfData] = await Promise.all([
+            _queryOTX_Domain(domain),
+            _queryThreatFox(domain)
+          ]);
+
+          if (otxData?.malicious) {
+            threats.push(`🔭 **AlienVault OTX**: ${otxData.pulses} campaña(s) de amenaza${otxData.tags.length ? ` — ${otxData.tags.slice(0,2).join(', ')}` : ''}`);
+            isMalicious = true;
+          }
+          if (tfData?.found) {
+            threats.push(`🦊 **ThreatFox**: IoC de ${tfData.malwareFamily} (${tfData.threatType}, confianza ${tfData.confidence}%)`);
+            isMalicious = true;
+          }
+
           // ── Heurísticas ──────────────────────────────────────────────────
           const patterns = [
             { pattern: /discord\.gift|discordnitro|free-nitro/i, label: '⚠️ Posible scam de Discord Nitro' },
@@ -219,7 +265,7 @@ module.exports = {
         if (threats.length > 0) embed.addFields({ name: '⚠️ Amenazas detectadas', value: threats.join('\n') });
         else embed.addFields({ name: '✅ Sin amenazas', value: 'No se encontraron amenazas conocidas.' });
 
-        embed.setFooter({ text: `URLhaus • PhishTank • VirusTotal${fromCache ? ' • 📦 Caché' : ''}` }).setTimestamp();
+        embed.setFooter({ text: `URLhaus • PhishTank • VirusTotal • OTX • ThreatFox${fromCache ? ' • 📦 Caché' : ''}` }).setTimestamp();
         return interaction.editReply({ embeds: [embed] });
       } catch (err) {
         console.error('[scanurl]', err);

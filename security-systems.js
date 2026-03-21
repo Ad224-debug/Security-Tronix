@@ -1,6 +1,7 @@
 /**
  * security-systems.js
- * Integra: Anti-Spam mejorado, Alt-Detector, FishFish Phishing Scanner
+ * Integra: Anti-Spam mejorado, Alt-Detector, FishFish Phishing Scanner,
+ *          AlienVault OTX, ThreatFox
  */
 
 const { EmbedBuilder } = require('discord.js');
@@ -178,7 +179,84 @@ async function checkAlt(member) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 4. HANDLER PRINCIPAL — se llama desde index.js en messageCreate
+// 4. ALIENVAULT OTX — enriquecimiento de IPs y dominios (sin key, gratis)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Consulta AlienVault OTX para una IP.
+ * Retorna { pulses, malicious, tags } o null si falla.
+ */
+async function queryOTX_IP(ip) {
+  try {
+    const res = await fetch(`https://otx.alienvault.com/api/v1/indicators/IPv4/${ip}/general`, {
+      headers: { 'User-Agent': 'TronixSecurity/1.0' },
+      signal: AbortSignal.timeout(6000)
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return {
+      pulses: data.pulse_info?.count ?? 0,
+      malicious: (data.pulse_info?.count ?? 0) > 0,
+      tags: (data.pulse_info?.pulses ?? []).slice(0, 3).map(p => p.name)
+    };
+  } catch { return null; }
+}
+
+/**
+ * Consulta AlienVault OTX para un dominio/URL.
+ * Retorna { pulses, malicious, tags } o null si falla.
+ */
+async function queryOTX_Domain(domain) {
+  try {
+    const res = await fetch(`https://otx.alienvault.com/api/v1/indicators/domain/${domain}/general`, {
+      headers: { 'User-Agent': 'TronixSecurity/1.0' },
+      signal: AbortSignal.timeout(6000)
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return {
+      pulses: data.pulse_info?.count ?? 0,
+      malicious: (data.pulse_info?.count ?? 0) > 0,
+      tags: (data.pulse_info?.pulses ?? []).slice(0, 3).map(p => p.name)
+    };
+  } catch { return null; }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 5. THREATFOX — IoCs de malware para dominios/URLs (sin key, gratis)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Consulta ThreatFox para un dominio o IP.
+ * Retorna { found, malwareFamily, threatType, confidence } o null si falla.
+ */
+async function queryThreatFox(query) {
+  try {
+    const res = await fetch('https://threatfox-api.abuse.ch/api/v1/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'User-Agent': 'TronixSecurity/1.0' },
+      body: JSON.stringify({ query: 'search_ioc', search_term: query }),
+      signal: AbortSignal.timeout(6000)
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data.query_status !== 'ok' || !data.data?.length) return { found: false };
+    const ioc = data.data[0];
+    return {
+      found: true,
+      malwareFamily: ioc.malware_printable || ioc.malware || 'Desconocido',
+      threatType: ioc.threat_type_desc || ioc.threat_type || 'Desconocido',
+      confidence: ioc.confidence_level ?? 0
+    };
+  } catch { return null; }
+}
+
+module.exports._queryOTX_IP     = queryOTX_IP;
+module.exports._queryOTX_Domain = queryOTX_Domain;
+module.exports._queryThreatFox  = queryThreatFox;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 6. HANDLER PRINCIPAL — se llama desde index.js en messageCreate
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function runSecurityChecks(message, sendLogFn) {
@@ -219,40 +297,60 @@ async function runSecurityChecks(message, sendLogFn) {
     return; // No seguir chequeando si ya es spam
   }
 
-  // — Phishing —
+  // — Phishing (FishFish + OTX + ThreatFox) —
   if (message.content && URL_REGEX.test(message.content)) {
-    URL_REGEX.lastIndex = 0; // reset regex state
-    const maliciousDomain = await checkPhishing(message.content);
-    if (maliciousDomain) {
+    URL_REGEX.lastIndex = 0;
+
+    const domainMatches = [...message.content.matchAll(URL_REGEX)].map(m => m[1].toLowerCase().replace(/^www\./, ''));
+    const domainsToCheck = [...new Set(domainMatches)].slice(0, 3);
+
+    const [fishfishDomain, ...rest] = await Promise.all([
+      checkPhishing(message.content),
+      ...domainsToCheck.flatMap(d => [queryOTX_Domain(d), queryThreatFox(d)])
+    ]);
+
+    const otxHit = domainsToCheck.findIndex((_, i) => rest[i * 2]?.malicious);
+    const tfHit  = domainsToCheck.findIndex((_, i) => rest[i * 2 + 1]?.found);
+
+    const detectedDomain = fishfishDomain
+      || (otxHit >= 0 ? domainsToCheck[otxHit] : null)
+      || (tfHit  >= 0 ? domainsToCheck[tfHit]  : null);
+
+    if (detectedDomain) {
       await message.delete().catch(() => {});
+
+      const sources = [
+        fishfishDomain ? 'FishFish' : null,
+        otxHit >= 0    ? `OTX (${rest[otxHit * 2].pulses} pulses)` : null,
+        tfHit  >= 0    ? `ThreatFox (${rest[tfHit * 2 + 1].malwareFamily})` : null
+      ].filter(Boolean).join(', ');
 
       const warn = await message.channel.send({
         content: L(
-          `🎣 ${message.author}, tu mensaje contenía un enlace de phishing y fue eliminado.`,
-          `🎣 ${message.author}, your message contained a phishing link and was removed.`
+          `🎣 ${message.author}, tu mensaje contenía un enlace malicioso y fue eliminado.`,
+          `🎣 ${message.author}, your message contained a malicious link and was removed.`
         )
       }).catch(() => null);
       if (warn) setTimeout(() => warn.delete().catch(() => {}), 8000);
 
-      // DM al usuario
       await message.author.send(
         L(
-          `⚠️ Tu mensaje en **${message.guild.name}** fue eliminado porque contenía el dominio de phishing: \`${maliciousDomain}\`\n\nEste dominio está en la base de datos de FishFish como sitio malicioso.`,
-          `⚠️ Your message in **${message.guild.name}** was removed because it contained the phishing domain: \`${maliciousDomain}\`\n\nThis domain is in the FishFish database as a malicious site.`
+          `⚠️ Tu mensaje en **${message.guild.name}** fue eliminado porque contenía el dominio malicioso: \`${detectedDomain}\`\n\nDetectado por: ${sources}`,
+          `⚠️ Your message in **${message.guild.name}** was removed because it contained the malicious domain: \`${detectedDomain}\`\n\nDetected by: ${sources}`
         )
       ).catch(() => {});
 
-      // Log
       const embed = new EmbedBuilder()
-        .setTitle(L('🎣 Phishing Detectado', '🎣 Phishing Detected'))
+        .setTitle(L('🎣 Enlace Malicioso Detectado', '🎣 Malicious Link Detected'))
         .setColor(0xFF0000)
         .addFields(
-          { name: L('Usuario', 'User'), value: `${message.author.tag} (${message.author.id})`, inline: true },
-          { name: L('Canal', 'Channel'), value: `${message.channel}`, inline: true },
-          { name: L('Dominio', 'Domain'), value: `\`${maliciousDomain}\``, inline: false },
+          { name: L('Usuario', 'User'),    value: `${message.author.tag} (${message.author.id})`, inline: true },
+          { name: L('Canal', 'Channel'),   value: `${message.channel}`, inline: true },
+          { name: L('Dominio', 'Domain'),  value: `\`${detectedDomain}\``, inline: false },
+          { name: L('Fuentes', 'Sources'), value: sources, inline: false },
           { name: L('Mensaje', 'Message'), value: message.content.substring(0, 500), inline: false }
         )
-        .setFooter({ text: 'FishFish API' })
+        .setFooter({ text: 'FishFish • AlienVault OTX • ThreatFox' })
         .setTimestamp();
       await sendLogFn(message.guild, embed);
     }
@@ -260,7 +358,7 @@ async function runSecurityChecks(message, sendLogFn) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 5. HANDLER DE ALT — se llama desde index.js en guildMemberAdd
+// 7. HANDLER DE ALT — se llama desde index.js en guildMemberAdd
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function runAltCheck(member, sendLogFn) {
