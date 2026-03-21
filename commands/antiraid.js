@@ -39,10 +39,10 @@ module.exports = {
           .addFields(
             { name: L('Sistema', 'System'), value: cfg.enabled ? '✅ Activo' : '❌ Inactivo', inline: true },
             { name: L('Lockdown', 'Lockdown'), value: state.active ? '🔒 En curso' : '🔓 Sin lockdown', inline: true },
-            { name: L('Canales bloqueados', 'Locked channels'), value: `${state.lockedChannels.length}`, inline: true },
-            { name: L('Umbral', 'Threshold'), value: `${cfg.threshold} joins / ${cfg.windowMs / 1000}s`, inline: true },
-            { name: L('Acción', 'Action'), value: cfg.action, inline: true },
-            { name: L('Edad mín. cuenta', 'Min account age'), value: `${cfg.minAccountAge} días`, inline: true },
+            { name: L('Canales bloqueados', 'Locked channels'), value: `${state.lockedChannels?.length ?? 0}`, inline: true },
+            { name: L('Umbral', 'Threshold'), value: `${cfg.threshold ?? 10} joins / ${(cfg.windowMs ?? 30000) / 1000}s`, inline: true },
+            { name: L('Acción', 'Action'), value: cfg.action ?? 'lockdown', inline: true },
+            { name: L('Edad mín. cuenta', 'Min account age'), value: `${cfg.minAccountAge ?? 7} días`, inline: true },
           )
           .setTimestamp();
 

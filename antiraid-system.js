@@ -8,7 +8,7 @@
  *  3. /config antiraid para configurar por servidor
  */
 
-const { EmbedBuilder, PermissionFlagsBits } = require('discord.js');
+const { EmbedBuilder, PermissionFlagsBits, ChannelType } = require('discord.js');
 const fs   = require('fs');
 const path = require('path');
 
@@ -64,14 +64,14 @@ async function lockdownGuild(guild, sendLog, cfg) {
   const lockedChannels = [];
 
   for (const [, channel] of guild.channels.cache) {
-    if (channel.type !== 0) continue; // solo GuildText
+    if (channel.type !== ChannelType.GuildText) continue;
     try {
       const everyoneOverwrite = channel.permissionOverwrites.cache.get(guild.id);
       // Solo bloquear si @everyone no tenía ya SendMessages=false
       if (everyoneOverwrite?.deny.has(PermissionFlagsBits.SendMessages)) continue;
 
       await channel.permissionOverwrites.edit(guild.id, {
-        [PermissionFlagsBits.SendMessages]: false,
+        SendMessages: false,
       });
       lockedChannels.push(channel.id);
     } catch { /* sin permisos en ese canal */ }
@@ -112,7 +112,7 @@ async function unlockGuild(guild, sendLog, reason = 'manual') {
     if (!channel) continue;
     try {
       await channel.permissionOverwrites.edit(guild.id, {
-        [PermissionFlagsBits.SendMessages]: null, // restaurar a heredado
+        SendMessages: null, // restaurar a heredado
       });
       unlocked++;
     } catch { /* sin permisos */ }
