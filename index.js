@@ -1,7 +1,28 @@
 require('dotenv').config();
-const { Client, GatewayIntentBits, Collection, PermissionFlagsBits } = require('discord.js');
+const { Client, GatewayIntentBits, Collection, PermissionFlagsBits, REST, Routes } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
+
+// ─── AUTO DEPLOY DE COMANDOS SLASH ───────────────────────────────────────────
+// Se ejecuta una vez al arrancar el bot (Railway, local, etc.)
+(async () => {
+  try {
+    const commandsPath = path.join(__dirname, 'commands');
+    const commandFiles = fs.readdirSync(commandsPath).filter(f => f.endsWith('.js'));
+    const cmds = [];
+    for (const file of commandFiles) {
+      try {
+        const cmd = require(path.join(commandsPath, file));
+        if (cmd.data) cmds.push(cmd.data.toJSON ? cmd.data.toJSON() : cmd.data);
+      } catch {}
+    }
+    const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
+    await rest.put(Routes.applicationCommands(process.env.APPLICATION_ID), { body: cmds });
+    console.log(`✅ Slash commands deployed (${cmds.length} commands)`);
+  } catch (err) {
+    console.error('❌ Error deploying slash commands:', err.message);
+  }
+})();
 
 const client = new Client({
   intents: [
