@@ -9,7 +9,19 @@ module.exports = {
     .setDescription('Configuración del servidor')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addSubcommand(s => s.setName('modlogs').setDescription('Configurar canales de logs de moderación')
-      .addStringOption(o => o.setName('type').setDescription('Tipo de log').setRequired(true).addChoices({ name: 'Kicks', value: 'kicks' }, { name: 'Bans', value: 'bans' }, { name: 'Warnings', value: 'warnings' }, { name: 'Timeouts', value: 'timeouts' }, { name: 'Automod', value: 'automod' }, { name: 'Todos', value: 'all' }))
+      .addStringOption(o => o.setName('type').setDescription('Tipo de log').setRequired(true).addChoices(
+        { name: 'Kicks', value: 'kicks' },
+        { name: 'Bans', value: 'bans' },
+        { name: 'Warnings', value: 'warnings' },
+        { name: 'Timeouts', value: 'timeouts' },
+        { name: 'Automod', value: 'automod' },
+        { name: 'Mensajes (edits/deletes/reacciones)', value: 'messages' },
+        { name: 'Voz (join/leave/move)', value: 'voice' },
+        { name: 'Miembros (join/leave/roles)', value: 'members' },
+        { name: 'Servidor (canales/roles/emojis)', value: 'server' },
+        { name: 'Invitaciones', value: 'invites' },
+        { name: 'Todos', value: 'all' }
+      ))
       .addChannelOption(o => o.setName('channel').setDescription('Canal').addChannelTypes(ChannelType.GuildText).setRequired(true)))
     .addSubcommand(s => s.setName('modlogs_view').setDescription('Ver configuración de logs de moderación'))
     .addSubcommand(s => s.setName('boostchannel').setDescription('Canal de notificaciones de boost')
@@ -64,7 +76,7 @@ module.exports = {
         if (!config.modLogs) config.modLogs = {};
         if (!config.modLogs[interaction.guild.id]) config.modLogs[interaction.guild.id] = {};
         if (type === 'all') {
-          ['kicks', 'bans', 'warnings', 'timeouts', 'automod'].forEach(t => config.modLogs[interaction.guild.id][t] = channel.id);
+          ['kicks', 'bans', 'warnings', 'timeouts', 'automod', 'messages', 'voice', 'members', 'server', 'invites'].forEach(t => config.modLogs[interaction.guild.id][t] = channel.id);
         } else {
           config.modLogs[interaction.guild.id][type] = channel.id;
         }
@@ -76,7 +88,21 @@ module.exports = {
       if (sub === 'modlogs_view') {
         const gl = guildConfig.get(interaction.guild.id, 'modLogs') || config.modLogs?.[interaction.guild.id] || {};
         const fmt = (id) => id ? `<#${id}>` : L('No configurado', 'Not configured');
-        return interaction.editReply({ embeds: [new EmbedBuilder().setTitle(L('⚙️ Logs de Moderación','⚙️ Moderation Logs')).addFields({ name: '👢 Kicks', value: fmt(gl.kicks), inline: true }, { name: '🔨 Bans', value: fmt(gl.bans), inline: true }, { name: '⚠️ Warnings', value: fmt(gl.warnings), inline: true }, { name: '⏱️ Timeouts', value: fmt(gl.timeouts), inline: true }, { name: '🤖 Automod', value: fmt(gl.automod), inline: true }).setColor(0x5865F2).setTimestamp()] });
+        return interaction.editReply({ embeds: [new EmbedBuilder()
+          .setTitle(L('⚙️ Logs de Moderación','⚙️ Moderation Logs'))
+          .addFields(
+            { name: '👢 Kicks',     value: fmt(gl.kicks),    inline: true },
+            { name: '🔨 Bans',      value: fmt(gl.bans),     inline: true },
+            { name: '⚠️ Warnings',  value: fmt(gl.warnings), inline: true },
+            { name: '⏱️ Timeouts',  value: fmt(gl.timeouts), inline: true },
+            { name: '🤖 Automod',   value: fmt(gl.automod),  inline: true },
+            { name: '💬 Mensajes',  value: fmt(gl.messages), inline: true },
+            { name: '🔊 Voz',       value: fmt(gl.voice),    inline: true },
+            { name: '👥 Miembros',  value: fmt(gl.members),  inline: true },
+            { name: '🏠 Servidor',  value: fmt(gl.server),   inline: true },
+            { name: '🔗 Invites',   value: fmt(gl.invites),  inline: true }
+          )
+          .setColor(0x5865F2).setTimestamp()] });
       }
 
       // ── BOOSTCHANNEL ───────────────────────────────────────────────────────

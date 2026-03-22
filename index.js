@@ -113,25 +113,35 @@ function hasCommandPermission(guildId, commandName, member) {
   return false;
 }
 
-// Enviar log al canal configurado
+// Enviar log al canal configurado (genérico)
 async function sendLog(guild, embed, isDeleteLog = false) {
-  // Si es un log de mensaje eliminado, usar el canal específico si existe
   let logChannelId;
   if (isDeleteLog) {
     logChannelId = getDeleteLogChannel(guild.id) || getLogChannel(guild.id);
   } else {
     logChannelId = getLogChannel(guild.id);
   }
-  
   if (!logChannelId) return;
-  
   try {
     const logChannel = await guild.channels.fetch(logChannelId);
-    if (logChannel) {
-      await logChannel.send({ embeds: [embed] });
-    }
+    if (logChannel) await logChannel.send({ embeds: [embed] });
   } catch (error) {
     console.error('Error enviando log:', error);
+  }
+}
+
+// Enviar log tipado — enruta al canal correcto según el tipo
+// Tipos: kicks, bans, warnings, timeouts, automod, messages, voice, members, server, invites
+async function sendTypedLog(guild, type, embed) {
+  const modLogs = guildConfig.get(guild.id, 'modLogs') || {};
+  // Buscar canal específico para el tipo, luego fallback al canal genérico
+  const channelId = modLogs[type] || getLogChannel(guild.id);
+  if (!channelId) return;
+  try {
+    const ch = await guild.channels.fetch(channelId);
+    if (ch) await ch.send({ embeds: [embed] });
+  } catch (err) {
+    console.error(`Error enviando typed log [${type}]:`, err);
   }
 }
 
@@ -139,6 +149,7 @@ async function sendLog(guild, embed, isDeleteLog = false) {
 client.getLanguage = getLanguage;
 client.getText = getText;
 client.sendLog = sendLog;
+client.sendTypedLog = sendTypedLog;
 
 const commandsPath = path.join(__dirname, 'commands');
 const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
@@ -308,41 +319,6 @@ function setupCronJobs() {
 
   console.log('✅ Cron jobs configured');
 }
-
-// ==================== SISTEMA DE VOZ ====================
-// Listener para prevenir que usuarios baneados se unan a canales de voz
-client.on('voiceStateUpdate', async (oldState, newState) => {
-  // Si el usuario se está uniendo a un canal
-  if (!oldState.channel && newState.channel) {
-    const vcBansPath = path.join(__dirname, 'data/voice-bans.json');
-    
-    if (fs.existsSync(vcBansPath)) {
-      const vcBans = JSON.parse(fs.readFileSync(vcBansPath, 'utf8'));
-      const key = `${newState.guild.id}-${newState.channel.id}`;
-      
-      if (vcBans[key] && vcBans[key].includes(newState.member.id)) {
-        // Usuario está baneado de este canal
-        try {
-          await newState.disconnect('Banned from this voice channel');
-          
-          const lang = getLanguage(newState.guild.id);
-          const member = newState.member;
-          
-          try {
-            await member.send(lang === 'es' 
-              ? `❌ Estás baneado del canal de voz **${newState.channel.name}** en **${newState.guild.name}**`
-              : `❌ You are banned from voice channel **${newState.channel.name}** in **${newState.guild.name}**`
-            );
-          } catch (error) {
-            // Usuario tiene DMs desactivados
-          }
-        } catch (error) {
-          console.error('Error disconnecting banned user from voice:', error);
-        }
-      }
-    }
-  }
-});
 
 // ==================== SISTEMA DE LOGS AUTOMÁTICO ====================
 const { EmbedBuilder } = require('discord.js');
@@ -542,7 +518,7 @@ client.on('messageDelete', async (message) => {
     // ID del mensaje
     embed.setFooter({ text: `ID del mensaje: ${message.id}` });
 
-    await sendLog(message.guild, embed, true); // true indica que es un log de mensaje eliminado
+    await sendTypedLog(message.guild, 'messages', embed); // messages log channel
     
     // Limpiar del cache
     messageCache.delete(message.id);
@@ -569,7 +545,7 @@ client.on('messageUpdate', async (oldMessage, newMessage) => {
     )
     .setTimestamp();
 
-  await sendLog(newMessage.guild, embed);
+  await sendTypedLog(newMessage.guild, 'messages', embed);
 });
 
 // ==================== ANÁLISIS DE REPUTACIÓN AL UNIRSE ====================
@@ -785,7 +761,7 @@ client.on('guildMemberAdd', async (member) => {
     )
     .setTimestamp();
 
-  await sendLog(member.guild, embed);
+  await sendTypedLog(member.guild, 'members', embed);
 
   // Análisis de reputación: solo si NO tiene formulario pendiente
   // (si tiene pending:true, se analizará cuando apruebe el formulario en guildMemberUpdate)
@@ -810,7 +786,7 @@ client.on('guildMemberRemove', async (member) => {
     )
     .setTimestamp();
 
-  await sendLog(member.guild, embed);
+  await sendTypedLog(member.guild, 'members', embed);
 });
 
 // Log: Usuario baneado
@@ -826,7 +802,7 @@ client.on('guildBanAdd', async (ban) => {
     )
     .setTimestamp();
 
-  await sendLog(ban.guild, embed);
+  await sendTypedLog(ban.guild, 'bans', embed);
 });
 
 // Log: Usuario desbaneado
@@ -841,7 +817,7 @@ client.on('guildBanRemove', async (ban) => {
     )
     .setTimestamp();
 
-  await sendLog(ban.guild, embed);
+  await sendTypedLog(ban.guild, 'bans', embed);
 });
 
 // Log: Rol asignado/removido
@@ -865,7 +841,7 @@ client.on('guildMemberUpdate', async (oldMember, newMember) => {
       )
       .setTimestamp();
 
-    await sendLog(newMember.guild, embed);
+    await sendTypedLog(newMember.guild, 'members', embed);
   }
 
   if (removedRoles.size > 0) {
@@ -878,7 +854,7 @@ client.on('guildMemberUpdate', async (oldMember, newMember) => {
       )
       .setTimestamp();
 
-    await sendLog(newMember.guild, embed);
+    await sendTypedLog(newMember.guild, 'members', embed);
   }
 
   // Log: Cambio de apodo
@@ -893,7 +869,35 @@ client.on('guildMemberUpdate', async (oldMember, newMember) => {
       )
       .setTimestamp();
 
-    await sendLog(newMember.guild, embed);
+    await sendTypedLog(newMember.guild, 'members', embed);
+  }
+
+  // Log: Timeout aplicado/removido
+  const oldTimeout = oldMember.communicationDisabledUntilTimestamp;
+  const newTimeout = newMember.communicationDisabledUntilTimestamp;
+  if (!oldTimeout && newTimeout && newTimeout > Date.now()) {
+    const embed = new EmbedBuilder()
+      .setTitle('⏱️ Timeout Aplicado')
+      .setColor(0xFFA500)
+      .setThumbnail(newMember.user.displayAvatarURL())
+      .addFields(
+        { name: '👤 Usuario', value: `${newMember.user.tag} (<@${newMember.id}>)`, inline: true },
+        { name: '🆔 ID', value: newMember.id, inline: true },
+        { name: '⏰ Expira', value: `<t:${Math.floor(newTimeout / 1000)}:R>`, inline: true }
+      )
+      .setTimestamp();
+    await sendTypedLog(newMember.guild, 'timeouts', embed);
+  } else if (oldTimeout && (!newTimeout || newTimeout <= Date.now())) {
+    const embed = new EmbedBuilder()
+      .setTitle('✅ Timeout Removido')
+      .setColor(0x57F287)
+      .setThumbnail(newMember.user.displayAvatarURL())
+      .addFields(
+        { name: '👤 Usuario', value: `${newMember.user.tag} (<@${newMember.id}>)`, inline: true },
+        { name: '🆔 ID', value: newMember.id, inline: true }
+      )
+      .setTimestamp();
+    await sendTypedLog(newMember.guild, 'timeouts', embed);
   }
 
   // Sistema de notificaciones de boost
@@ -989,7 +993,7 @@ client.on('channelCreate', async (channel) => {
     )
     .setTimestamp();
 
-  await sendLog(channel.guild, embed);
+  await sendTypedLog(channel.guild, 'server', embed);
 });
 
 // Log: Canal eliminado
@@ -1006,7 +1010,7 @@ client.on('channelDelete', async (channel) => {
     )
     .setTimestamp();
 
-  await sendLog(channel.guild, embed);
+  await sendTypedLog(channel.guild, 'server', embed);
 });
 
 // Log: Rol creado
@@ -1021,7 +1025,7 @@ client.on('roleCreate', async (role) => {
     )
     .setTimestamp();
 
-  await sendLog(role.guild, embed);
+  await sendTypedLog(role.guild, 'server', embed);
 });
 
 // Log: Rol eliminado
@@ -1036,7 +1040,289 @@ client.on('roleDelete', async (role) => {
     )
     .setTimestamp();
 
-  await sendLog(role.guild, embed);
+  await sendTypedLog(role.guild, 'server', embed);
+});
+
+// Log: Canal actualizado (nombre, topic, permisos)
+client.on('channelUpdate', async (oldChannel, newChannel) => {
+  if (!newChannel.guild) return;
+  const changes = [];
+  if (oldChannel.name !== newChannel.name) changes.push({ name: '📝 Nombre', value: `\`${oldChannel.name}\` → \`${newChannel.name}\``, inline: false });
+  if (oldChannel.topic !== newChannel.topic) changes.push({ name: '📋 Topic', value: `${oldChannel.topic || '*vacío*'} → ${newChannel.topic || '*vacío*'}`, inline: false });
+  if (oldChannel.rateLimitPerUser !== newChannel.rateLimitPerUser) changes.push({ name: '🐌 Slowmode', value: `${oldChannel.rateLimitPerUser}s → ${newChannel.rateLimitPerUser}s`, inline: true });
+  if (oldChannel.nsfw !== newChannel.nsfw) changes.push({ name: '🔞 NSFW', value: `${oldChannel.nsfw} → ${newChannel.nsfw}`, inline: true });
+  if (changes.length === 0) return;
+  const embed = new EmbedBuilder()
+    .setTitle('⚙️ Canal Actualizado')
+    .setColor(0xFFA500)
+    .addFields({ name: '📍 Canal', value: `${newChannel}`, inline: true }, { name: '🆔 ID', value: newChannel.id, inline: true }, ...changes)
+    .setTimestamp();
+  await sendTypedLog(newChannel.guild, 'server', embed);
+});
+
+// Log: Rol actualizado (nombre, color, permisos)
+client.on('roleUpdate', async (oldRole, newRole) => {
+  const changes = [];
+  if (oldRole.name !== newRole.name) changes.push({ name: '📝 Nombre', value: `\`${oldRole.name}\` → \`${newRole.name}\``, inline: false });
+  if (oldRole.hexColor !== newRole.hexColor) changes.push({ name: '🎨 Color', value: `${oldRole.hexColor} → ${newRole.hexColor}`, inline: true });
+  if (oldRole.hoist !== newRole.hoist) changes.push({ name: '📌 Mostrar separado', value: `${oldRole.hoist} → ${newRole.hoist}`, inline: true });
+  if (oldRole.mentionable !== newRole.mentionable) changes.push({ name: '🔔 Mencionable', value: `${oldRole.mentionable} → ${newRole.mentionable}`, inline: true });
+  // Detectar cambios de permisos
+  const addedPerms = newRole.permissions.toArray().filter(p => !oldRole.permissions.has(p));
+  const removedPerms = oldRole.permissions.toArray().filter(p => !newRole.permissions.has(p));
+  if (addedPerms.length > 0) changes.push({ name: '✅ Permisos añadidos', value: addedPerms.join(', ').substring(0, 1024), inline: false });
+  if (removedPerms.length > 0) changes.push({ name: '❌ Permisos removidos', value: removedPerms.join(', ').substring(0, 1024), inline: false });
+  if (changes.length === 0) return;
+  const embed = new EmbedBuilder()
+    .setTitle('⚙️ Rol Actualizado')
+    .setColor(newRole.color || 0xFFA500)
+    .addFields({ name: '🎭 Rol', value: `${newRole}`, inline: true }, { name: '🆔 ID', value: newRole.id, inline: true }, ...changes)
+    .setTimestamp();
+  await sendTypedLog(newRole.guild, 'server', embed);
+});
+
+// Log: Servidor actualizado (nombre, icono, nivel de verificación)
+client.on('guildUpdate', async (oldGuild, newGuild) => {
+  const changes = [];
+  if (oldGuild.name !== newGuild.name) changes.push({ name: '📝 Nombre', value: `\`${oldGuild.name}\` → \`${newGuild.name}\``, inline: false });
+  if (oldGuild.verificationLevel !== newGuild.verificationLevel) changes.push({ name: '🔒 Verificación', value: `${oldGuild.verificationLevel} → ${newGuild.verificationLevel}`, inline: true });
+  if (oldGuild.explicitContentFilter !== newGuild.explicitContentFilter) changes.push({ name: '🔞 Filtro contenido', value: `${oldGuild.explicitContentFilter} → ${newGuild.explicitContentFilter}`, inline: true });
+  if (oldGuild.icon !== newGuild.icon) changes.push({ name: '🖼️ Icono', value: 'Cambiado', inline: true });
+  if (oldGuild.banner !== newGuild.banner) changes.push({ name: '🎨 Banner', value: 'Cambiado', inline: true });
+  if (changes.length === 0) return;
+  const embed = new EmbedBuilder()
+    .setTitle('🏠 Servidor Actualizado')
+    .setColor(0x5865F2)
+    .addFields(...changes)
+    .setTimestamp();
+  await sendTypedLog(newGuild, 'server', embed);
+});
+
+// Log: Emoji creado/eliminado
+client.on('emojiCreate', async (emoji) => {
+  const embed = new EmbedBuilder()
+    .setTitle('😀 Emoji Creado')
+    .setColor(0x57F287)
+    .setThumbnail(emoji.url)
+    .addFields({ name: 'Nombre', value: emoji.name, inline: true }, { name: 'ID', value: emoji.id, inline: true }, { name: 'Animado', value: emoji.animated ? '✅' : '❌', inline: true })
+    .setTimestamp();
+  await sendTypedLog(emoji.guild, 'server', embed);
+});
+
+client.on('emojiDelete', async (emoji) => {
+  const embed = new EmbedBuilder()
+    .setTitle('😀 Emoji Eliminado')
+    .setColor(0xED4245)
+    .addFields({ name: 'Nombre', value: emoji.name, inline: true }, { name: 'ID', value: emoji.id, inline: true })
+    .setTimestamp();
+  await sendTypedLog(emoji.guild, 'server', embed);
+});
+
+// Log: Sticker creado/eliminado
+client.on('stickerCreate', async (sticker) => {
+  const embed = new EmbedBuilder()
+    .setTitle('🎨 Sticker Creado')
+    .setColor(0x57F287)
+    .addFields({ name: 'Nombre', value: sticker.name, inline: true }, { name: 'ID', value: sticker.id, inline: true })
+    .setTimestamp();
+  await sendTypedLog(sticker.guild, 'server', embed);
+});
+
+client.on('stickerDelete', async (sticker) => {
+  const embed = new EmbedBuilder()
+    .setTitle('🎨 Sticker Eliminado')
+    .setColor(0xED4245)
+    .addFields({ name: 'Nombre', value: sticker.name, inline: true }, { name: 'ID', value: sticker.id, inline: true })
+    .setTimestamp();
+  await sendTypedLog(sticker.guild, 'server', embed);
+});
+
+// Log: Invitaciones creadas/eliminadas
+client.on('inviteCreate', async (invite) => {
+  const embed = new EmbedBuilder()
+    .setTitle('🔗 Invitación Creada')
+    .setColor(0x57F287)
+    .addFields(
+      { name: '👤 Creada por', value: invite.inviter ? `${invite.inviter.tag} (<@${invite.inviter.id}>)` : 'Desconocido', inline: true },
+      { name: '📍 Canal', value: `<#${invite.channel.id}>`, inline: true },
+      { name: '🔑 Código', value: invite.code, inline: true },
+      { name: '⏰ Expira', value: invite.expiresAt ? `<t:${Math.floor(invite.expiresAt.getTime() / 1000)}:R>` : 'Nunca', inline: true },
+      { name: '🔢 Usos máx.', value: invite.maxUses ? `${invite.maxUses}` : 'Ilimitado', inline: true }
+    )
+    .setTimestamp();
+  await sendTypedLog(invite.guild, 'invites', embed);
+});
+
+client.on('inviteDelete', async (invite) => {
+  const embed = new EmbedBuilder()
+    .setTitle('🔗 Invitación Eliminada')
+    .setColor(0xED4245)
+    .addFields(
+      { name: '🔑 Código', value: invite.code, inline: true },
+      { name: '📍 Canal', value: `<#${invite.channel.id}>`, inline: true }
+    )
+    .setTimestamp();
+  await sendTypedLog(invite.guild, 'invites', embed);
+});
+
+// Log: Eliminación masiva de mensajes (purge)
+client.on('messageDeleteBulk', async (messages) => {
+  const first = messages.first();
+  if (!first?.guild) return;
+  const embed = new EmbedBuilder()
+    .setTitle('🗑️ Mensajes Eliminados en Masa')
+    .setColor(0xFF0000)
+    .addFields(
+      { name: '📍 Canal', value: `<#${first.channel.id}>`, inline: true },
+      { name: '🔢 Cantidad', value: `${messages.size} mensajes`, inline: true }
+    )
+    .setTimestamp();
+  await sendTypedLog(first.guild, 'messages', embed);
+});
+
+// Log: Reacciones añadidas/removidas
+client.on('messageReactionAdd', async (reaction, user) => {
+  if (user.bot) return;
+  if (!reaction.message.guild) return;
+  // Fetch parcial si es necesario
+  if (reaction.partial) { try { await reaction.fetch(); } catch { return; } }
+  const embed = new EmbedBuilder()
+    .setTitle('👍 Reacción Añadida')
+    .setColor(0x57F287)
+    .addFields(
+      { name: '👤 Usuario', value: `${user.tag} (<@${user.id}>)`, inline: true },
+      { name: '😀 Emoji', value: reaction.emoji.toString(), inline: true },
+      { name: '📍 Canal', value: `<#${reaction.message.channel.id}>`, inline: true },
+      { name: '🔗 Mensaje', value: `[Ver mensaje](${reaction.message.url})`, inline: true }
+    )
+    .setTimestamp();
+  await sendTypedLog(reaction.message.guild, 'messages', embed);
+});
+
+client.on('messageReactionRemove', async (reaction, user) => {
+  if (user.bot) return;
+  if (!reaction.message.guild) return;
+  if (reaction.partial) { try { await reaction.fetch(); } catch { return; } }
+  const embed = new EmbedBuilder()
+    .setTitle('👎 Reacción Removida')
+    .setColor(0xFFA500)
+    .addFields(
+      { name: '👤 Usuario', value: `${user.tag} (<@${user.id}>)`, inline: true },
+      { name: '😀 Emoji', value: reaction.emoji.toString(), inline: true },
+      { name: '📍 Canal', value: `<#${reaction.message.channel.id}>`, inline: true },
+      { name: '🔗 Mensaje', value: `[Ver mensaje](${reaction.message.url})`, inline: true }
+    )
+    .setTimestamp();
+  await sendTypedLog(reaction.message.guild, 'messages', embed);
+});
+
+// Log: Hilos (threads) creados/eliminados/archivados
+client.on('threadCreate', async (thread) => {
+  const embed = new EmbedBuilder()
+    .setTitle('🧵 Hilo Creado')
+    .setColor(0x57F287)
+    .addFields(
+      { name: '📝 Nombre', value: thread.name, inline: true },
+      { name: '📍 Canal padre', value: `<#${thread.parentId}>`, inline: true },
+      { name: '🆔 ID', value: thread.id, inline: true }
+    )
+    .setTimestamp();
+  await sendTypedLog(thread.guild, 'server', embed);
+});
+
+client.on('threadDelete', async (thread) => {
+  const embed = new EmbedBuilder()
+    .setTitle('🧵 Hilo Eliminado')
+    .setColor(0xED4245)
+    .addFields(
+      { name: '📝 Nombre', value: thread.name, inline: true },
+      { name: '📍 Canal padre', value: `<#${thread.parentId}>`, inline: true },
+      { name: '🆔 ID', value: thread.id, inline: true }
+    )
+    .setTimestamp();
+  await sendTypedLog(thread.guild, 'server', embed);
+});
+
+client.on('threadUpdate', async (oldThread, newThread) => {
+  if (!oldThread.archived && newThread.archived) {
+    const embed = new EmbedBuilder()
+      .setTitle('🧵 Hilo Archivado')
+      .setColor(0x808080)
+      .addFields(
+        { name: '📝 Nombre', value: newThread.name, inline: true },
+        { name: '📍 Canal padre', value: `<#${newThread.parentId}>`, inline: true }
+      )
+      .setTimestamp();
+    await sendTypedLog(newThread.guild, 'server', embed);
+  }
+});
+
+// Log: Voz — join, leave, move
+client.on('voiceStateUpdate', async (oldState, newState) => {
+  // VC ban check (ya existente, se mantiene)
+  if (!oldState.channel && newState.channel) {
+    const vcBansPath = require('path').join(__dirname, 'data/voice-bans.json');
+    if (require('fs').existsSync(vcBansPath)) {
+      const vcBans = JSON.parse(require('fs').readFileSync(vcBansPath, 'utf8'));
+      const key = `${newState.guild.id}-${newState.channel.id}`;
+      if (vcBans[key] && vcBans[key].includes(newState.member.id)) {
+        try {
+          await newState.disconnect('Banned from this voice channel');
+          const lang = getLanguage(newState.guild.id);
+          try {
+            await newState.member.send(lang === 'es'
+              ? `❌ Estás baneado del canal de voz **${newState.channel.name}** en **${newState.guild.name}**`
+              : `❌ You are banned from voice channel **${newState.channel.name}** in **${newState.guild.name}**`
+            );
+          } catch {}
+        } catch (error) {
+          console.error('Error disconnecting banned user from voice:', error);
+        }
+        return;
+      }
+    }
+  }
+
+  // Voice logging
+  const member = newState.member || oldState.member;
+  if (!member || member.user.bot) return;
+
+  let embed = null;
+
+  if (!oldState.channel && newState.channel) {
+    // Joined
+    embed = new EmbedBuilder()
+      .setTitle('🔊 Entró a Voz')
+      .setColor(0x57F287)
+      .addFields(
+        { name: '👤 Usuario', value: `${member.user.tag} (<@${member.id}>)`, inline: true },
+        { name: '📍 Canal', value: `${newState.channel.name}`, inline: true }
+      )
+      .setTimestamp();
+  } else if (oldState.channel && !newState.channel) {
+    // Left
+    embed = new EmbedBuilder()
+      .setTitle('🔇 Salió de Voz')
+      .setColor(0xED4245)
+      .addFields(
+        { name: '👤 Usuario', value: `${member.user.tag} (<@${member.id}>)`, inline: true },
+        { name: '📍 Canal', value: `${oldState.channel.name}`, inline: true }
+      )
+      .setTimestamp();
+  } else if (oldState.channel && newState.channel && oldState.channel.id !== newState.channel.id) {
+    // Moved
+    embed = new EmbedBuilder()
+      .setTitle('🔀 Movido en Voz')
+      .setColor(0xFFA500)
+      .addFields(
+        { name: '👤 Usuario', value: `${member.user.tag} (<@${member.id}>)`, inline: true },
+        { name: '📤 Desde', value: oldState.channel.name, inline: true },
+        { name: '📥 Hacia', value: newState.channel.name, inline: true }
+      )
+      .setTimestamp();
+  }
+
+  if (embed) await sendTypedLog(newState.guild || oldState.guild, 'voice', embed);
 });
 
 // ==================== FIN SISTEMA DE LOGS ====================
