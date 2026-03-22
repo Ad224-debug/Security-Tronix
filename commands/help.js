@@ -59,8 +59,7 @@ module.exports = {
         title: L('⚙️ Configuración', '⚙️ Configuration'),
         color: 0x5865F2,
         commands: [
-          { name: '/config modlogs', desc: L('Configurar canales de logs de moderación', 'Configure moderation log channels') },
-          { name: '/config modlogs_view', desc: L('Ver configuración de logs', 'View log configuration') },
+          { name: '/logs', desc: L('Panel interactivo de logs (activar/desactivar por tipo)', 'Interactive logs panel (toggle by type)') },
           { name: '/config language', desc: L('Cambiar idioma del bot', 'Change bot language') },
           { name: '/config prefix', desc: L('Cambiar prefijo del bot', 'Change bot prefix') },
           { name: '/config boostchannel', desc: L('Canal de notificaciones de boost', 'Boost notification channel') },
@@ -71,7 +70,6 @@ module.exports = {
           { name: '/config cmdperm', desc: L('Permisos personalizados por comando', 'Custom command permissions') },
           { name: '/config joincheck', desc: L('Canal de análisis de reputación al unirse', 'Join reputation check channel') },
           { name: '/config antiraid', desc: L('Configurar sistema anti-raid', 'Configure anti-raid system') },
-          { name: '/modsetup', desc: L('Configurar canales de logs (legacy)', 'Configure log channels (legacy)') },
           { name: '/automod', desc: L('Panel de auto-moderación', 'Auto-moderation panel') },
           { name: '/suggestion setup', desc: L('Configurar canal de sugerencias', 'Configure suggestion channel') },
         ]
@@ -104,6 +102,7 @@ module.exports = {
           { name: '/security usercheck', desc: L('Análisis de seguridad de un usuario', 'User security analysis') },
           { name: '/security roblox', desc: L('Información de cuenta de Roblox', 'Roblox account information') },
           { name: '/security roblox_avatar', desc: L('Avatar de cuenta de Roblox', 'Roblox account avatar') },
+          { name: '/security leakcheck', desc: L('Buscar usuario/email en filtraciones de datos', 'Search user/email in data breaches') },
         ]
       },
       fun: {
@@ -120,7 +119,6 @@ module.exports = {
           { name: '/fun afk', desc: L('Establecer estado AFK', 'Set AFK status') },
           { name: '/say', desc: L('Hacer que el bot envíe un mensaje', 'Make the bot send a message') },
           { name: '/embed', desc: L('Crear embed personalizado', 'Create custom embed') },
-          { name: '/hello', desc: L('El bot te saluda', 'The bot greets you') },
           { name: '/suggestion submit', desc: L('Enviar sugerencia al servidor', 'Submit a suggestion') },
         ]
       },
@@ -159,7 +157,6 @@ module.exports = {
           { name: '/admin backup', desc: L('Crear/restaurar backup de configuración', 'Create/restore config backup') },
           { name: '/setbotname', desc: L('Cambiar nombre del bot', 'Change bot name') },
           { name: '/setbotavatar', desc: L('Cambiar avatar del bot', 'Change bot avatar') },
-          { name: '/sync', desc: L('Sincronizar comandos slash', 'Sync slash commands') },
           { name: '/suggestion approve', desc: L('Aprobar sugerencia', 'Approve suggestion') },
           { name: '/suggestion deny', desc: L('Rechazar sugerencia', 'Deny suggestion') },
         ]
