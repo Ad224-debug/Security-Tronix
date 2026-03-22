@@ -1502,6 +1502,17 @@ client.on('interactionCreate', async (interaction) => {
     return;
   }
 
+  // Manejar botones y modals de logs
+  if ((interaction.isButton() || interaction.isModalSubmit()) && interaction.customId?.startsWith('logs_')) {
+    try {
+      const logsCmd = client.commands.get('logs');
+      if (logsCmd?.handleInteraction) await logsCmd.handleInteraction(interaction);
+    } catch (e) {
+      console.error('Error en logs interaction:', e);
+    }
+    return;
+  }
+
   // Manejar botones de /fun (hug, kiss, slap)
   if (interaction.isButton() && interaction.customId?.startsWith('fun_')) {
     try {
