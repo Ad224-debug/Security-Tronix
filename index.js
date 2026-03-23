@@ -274,6 +274,46 @@ function setupCronJobs() {
     await reminderScheduler.checkAndSendReminders();
   });
 
+  // ── Tempban persistente: revisar cada 5 minutos ───────────────────────────
+  // Desbanea usuarios cuyo tempban expiró (sobrevive reinicios del bot)
+  scheduleSafe('tempbanExpiry', '*/5 * * * *', async () => {
+    const casesPath = path.join(__dirname, 'data/mod-cases.json');
+    if (!fs.existsSync(casesPath)) return;
+    let cases;
+    try { cases = JSON.parse(fs.readFileSync(casesPath, 'utf8')); } catch { return; }
+    const now = Date.now();
+    let changed = false;
+    for (const [guildId, guildCases] of Object.entries(cases)) {
+      const guild = client.guilds.cache.get(guildId);
+      if (!guild) continue;
+      for (const c of guildCases) {
+        if (c.type === 'tempban' && c.expiresAt && c.expiresAt <= now && !c.unbanned) {
+          try {
+            await guild.members.unban(c.targetId, 'Tempban expirado');
+            c.unbanned = true;
+            changed = true;
+            console.log(`[tempban] Unbanned ${c.targetId} in ${guild.name} (case #${c.id})`);
+            // Log del unban automático
+            const embed = new EmbedBuilder()
+              .setTitle('⏰ Tempban Expirado — Unban Automático')
+              .setColor(0x57F287)
+              .addFields(
+                { name: '👤 Usuario', value: `<@${c.targetId}> (${c.targetId})`, inline: true },
+                { name: '📋 Caso', value: `#${c.id}`, inline: true },
+                { name: '📝 Razón original', value: c.reason || 'N/A', inline: false }
+              )
+              .setTimestamp();
+            await sendTypedLog(guild, 'bans', embed);
+          } catch (err) {
+            // Usuario ya no estaba baneado o no existe — marcar igual para no reintentar
+            if (err.code === 10026 || err.code === 10007) { c.unbanned = true; changed = true; }
+          }
+        }
+      }
+    }
+    if (changed) fs.writeFileSync(casesPath, JSON.stringify(cases, null, 2));
+  });
+
   // Actualizar estados de eventos cada 10 minutos
   scheduleSafe('statusUpdate', '*/10 * * * *', async () => {
     eventManager.checkAndUpdateEventStatuses();

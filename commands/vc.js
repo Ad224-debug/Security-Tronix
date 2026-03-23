@@ -1,6 +1,6 @@
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
 const { joinVoiceChannel, getVoiceConnection } = require('@discordjs/voice');
-const { createCase } = require('./case.js');
+const { createCase } = require('../utils/createCase');
 const fs = require('fs');
 const path = require('path');
 

@@ -119,8 +119,12 @@ module.exports = {
           .setEmoji('✖️')
       );
 
+    // Ping mod role if configured, fallback to owner
+    const modRoleId = guildConfig.get(interaction.guild.id, 'modRole');
+    const pingContent = modRoleId ? `<@&${modRoleId}>` : `<@${interaction.guild.ownerId}>`;
+
     await reportChannel.send({ 
-      content: `<@${interaction.guild.ownerId}>`,
+      content: pingContent,
       embeds: [embed],
       components: [row]
     });

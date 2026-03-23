@@ -1,6 +1,6 @@
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ChannelType } = require('discord.js');
 const guildConfig = require('../guild-config');
-const { createCase } = require('./case.js');
+const { createCase } = require('../utils/createCase');
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

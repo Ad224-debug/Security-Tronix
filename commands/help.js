@@ -16,7 +16,8 @@ module.exports = {
           { name: '🎉 Diversión', value: 'fun' },
           { name: '🎤 Voz', value: 'voice' },
           { name: '📅 Eventos', value: 'events' },
-          { name: '🤖 Admin/Bot', value: 'bot' }
+          { name: '🤖 Admin/Bot', value: 'bot' },
+          { name: '🟥 Roblox', value: 'roblox' }
         )),
 
   async execute(interaction) {
@@ -43,15 +44,14 @@ module.exports = {
           { name: '/mod note', desc: L('Agregar nota privada a un usuario', 'Add private note to user') },
           { name: '/mod log', desc: L('Registrar mensajes de un usuario', 'Log user messages') },
           { name: '/mod stoplog', desc: L('Detener registro y exportar', 'Stop log and export') },
-          { name: '/case', desc: L('Ver caso de moderación por ID', 'View moderation case by ID') },
           { name: '/warnings', desc: L('Ver advertencias de un usuario', 'View user warnings') },
-          { name: '/mute', desc: L('Mutear usuario en el canal', 'Mute user in channel') },
-          { name: '/unmute', desc: L('Desmutear usuario en el canal', 'Unmute user in channel') },
-          { name: '/purge', desc: L('Eliminar mensajes en masa', 'Bulk delete messages') },
           { name: '/lock', desc: L('Bloquear/desbloquear canal', 'Lock/unlock channel') },
           { name: '/slowmode', desc: L('Configurar modo lento del canal', 'Set channel slowmode') },
           { name: '/nickname', desc: L('Cambiar apodo de un usuario', 'Change user nickname') },
           { name: '/role', desc: L('Asignar/remover roles', 'Assign/remove roles') },
+          { name: '/jail user', desc: L('Aislar usuario (quitar roles, asignar rol jail)', 'Jail user (remove roles, assign jail role)') },
+          { name: '/jail free', desc: L('Liberar usuario (devolver roles)', 'Free user (restore roles)') },
+          { name: '/jail list', desc: L('Ver usuarios aislados', 'View jailed users') },
           { name: '/report', desc: L('Reportar usuario a moderadores', 'Report user to moderators') },
         ]
       },
@@ -60,10 +60,15 @@ module.exports = {
         color: 0x5865F2,
         commands: [
           { name: '/logs', desc: L('Panel interactivo de logs (activar/desactivar por tipo)', 'Interactive logs panel (toggle by type)') },
+          { name: '/verify setup', desc: L('Configurar sistema de verificación de entrada', 'Configure entry verification system') },
+          { name: '/verify panel', desc: L('Enviar panel de verificación al canal', 'Send verification panel to channel') },
+          { name: '/verify status', desc: L('Ver estado del sistema de verificación', 'View verification system status') },
+          { name: '/jail setup', desc: L('Configurar sistema de jail (rol + canal)', 'Configure jail system (role + channel)') },
           { name: '/config language', desc: L('Cambiar idioma del bot', 'Change bot language') },
           { name: '/config prefix', desc: L('Cambiar prefijo del bot', 'Change bot prefix') },
           { name: '/config boostchannel', desc: L('Canal de notificaciones de boost', 'Boost notification channel') },
           { name: '/config reportchannel', desc: L('Canal de reportes', 'Report channel') },
+          { name: '/config modrole', desc: L('Rol de moderadores (para reportes)', 'Moderator role (for reports)') },
           { name: '/config warnsetup', desc: L('Configurar sistema de advertencias', 'Configure warning system') },
           { name: '/config rb3', desc: L('Configurar sistema de strikes RB3', 'Configure RB3 strike system') },
           { name: '/config botperm', desc: L('Control de permisos para agregar bots', 'Bot add permission control') },
@@ -71,6 +76,7 @@ module.exports = {
           { name: '/config joincheck', desc: L('Canal de análisis de reputación al unirse', 'Join reputation check channel') },
           { name: '/config antiraid', desc: L('Configurar sistema anti-raid', 'Configure anti-raid system') },
           { name: '/automod', desc: L('Panel de auto-moderación', 'Auto-moderation panel') },
+          { name: '/trigger', desc: L('Panel de auto-respuestas (triggers)', 'Auto-response triggers panel') },
           { name: '/suggestion setup', desc: L('Configurar canal de sugerencias', 'Configure suggestion channel') },
         ]
       },
@@ -131,19 +137,22 @@ module.exports = {
           { name: '/vc kick', desc: L('Expulsar usuario de voz', 'Kick user from voice') },
           { name: '/vc mute', desc: L('Mutear usuario en voz', 'Mute user in voice') },
           { name: '/vc unmute', desc: L('Desmutear usuario en voz', 'Unmute user in voice') },
-          { name: '/vc ban', desc: L('Banear usuario de canal de voz', 'Ban user from voice channel') },
+          { name: '/vc ban', desc: L('Banear usuario de un canal de voz', 'Ban user from a voice channel') },
+          { name: '/vc unban', desc: L('Desbanear usuario de canal de voz', 'Unban user from voice channel') },
+          { name: '/vc banlist', desc: L('Ver lista de bans de voz', 'View voice ban list') },
         ]
       },
       events: {
         title: L('📅 Eventos', '📅 Events'),
         color: 0x9B59B6,
         commands: [
-          { name: '/event create', desc: L('Crear nuevo evento', 'Create new event') },
-          { name: '/event list', desc: L('Listar eventos activos', 'List active events') },
-          { name: '/event view', desc: L('Ver detalles de un evento', 'View event details') },
-          { name: '/event edit', desc: L('Editar evento existente', 'Edit existing event') },
+          { name: '/event create', desc: L('Crear nuevo evento (con recurrencia, rol, imagen, límite)', 'Create new event (with recurrence, role, image, limit)') },
+          { name: '/event list', desc: L('Listar eventos activos (filtrar por estado)', 'List active events (filter by status)') },
+          { name: '/event info', desc: L('Ver detalles completos de un evento', 'View full event details') },
+          { name: '/event edit', desc: L('Editar título, descripción, fecha o lugar', 'Edit title, description, date or location') },
           { name: '/event delete', desc: L('Eliminar evento', 'Delete event') },
-          { name: '/event stats', desc: L('Estadísticas de eventos', 'Event statistics') },
+          { name: '/event stats', desc: L('Estadísticas de participación de un usuario', 'User participation statistics') },
+          { name: '/event leaderboard', desc: L('Top asistentes a eventos del servidor', 'Top event attendees in the server') },
         ]
       },
       bot: {
@@ -151,20 +160,34 @@ module.exports = {
         color: 0x99AAB5,
         commands: [
           { name: '/admin clear', desc: L('Limpiar mensajes del canal', 'Clear channel messages') },
+          { name: '/admin lockdown', desc: L('Bloquear/desbloquear todos los canales del servidor', 'Lock/unlock all server channels') },
+          { name: '/admin nuke', desc: L('Clonar y eliminar el canal (solo owner)', 'Clone and delete channel (owner only)') },
           { name: '/admin dm', desc: L('Enviar DM a usuario(s)', 'Send DM to user(s)') },
-          { name: '/admin purge', desc: L('Eliminar mensajes de bots', 'Delete bot messages') },
-          { name: '/admin announce', desc: L('Hacer un anuncio', 'Make an announcement') },
-          { name: '/admin backup', desc: L('Crear/restaurar backup de configuración', 'Create/restore config backup') },
-          { name: '/setbotname', desc: L('Cambiar nombre del bot', 'Change bot name') },
+          { name: '/admin purge', desc: L('Eliminar mensajes con una palabra clave', 'Delete messages containing a keyword') },
+          { name: '/admin announce', desc: L('Enviar anuncio a un canal', 'Send announcement to a channel') },
+          { name: '/admin backup', desc: L('Crear/listar/restaurar/eliminar backups', 'Create/list/restore/delete backups') },
+          { name: '/setbotname', desc: L('Cambiar apodo del bot en el servidor', 'Change bot nickname in the server') },
           { name: '/setbotavatar', desc: L('Cambiar avatar del bot', 'Change bot avatar') },
           { name: '/suggestion approve', desc: L('Aprobar sugerencia', 'Approve suggestion') },
           { name: '/suggestion deny', desc: L('Rechazar sugerencia', 'Deny suggestion') },
         ]
-      }
+      },
+      roblox: {
+        title: '🟥 Roblox',
+        color: 0xFF0000,
+        commands: [
+          { name: '/roblox user', desc: L('Perfil completo de un usuario (badges, grupos, juegos, presencia)', 'Full user profile (badges, groups, games, presence)') },
+          { name: '/roblox avatar', desc: L('Avatar de un usuario (headshot, busto o cuerpo completo)', 'User avatar (headshot, bust or full body)') },
+          { name: '/roblox game', desc: L('Info de un juego (visitas, jugadores, creador)', 'Game info (visits, players, creator)') },
+          { name: '/roblox group', desc: L('Info de un grupo (miembros, dueño, tipo)', 'Group info (members, owner, type)') },
+          { name: '/roblox badges', desc: L('Lista de badges de un usuario', 'User badge list') },
+          { name: '/roblox friends', desc: L('Lista de amigos de un usuario', 'User friend list') },
+          { name: '/roblox rap', desc: L('Valor de inventario (RAP) de un usuario', 'User inventory value (RAP)') },
+        ]
+      },
     };
 
     if (category && commands[category]) {
-      const cat = commands[category];
       const embed = new EmbedBuilder()
         .setTitle(cat.title)
         .setDescription(cat.commands.map(cmd => `**${cmd.name}** — ${cmd.desc}`).join('\n'))
@@ -192,6 +215,7 @@ module.exports = {
         { name: '🎤 Voz', value: `${commands.voice.commands.length} cmds`, inline: true },
         { name: '📅 Eventos', value: `${commands.events.commands.length} cmds`, inline: true },
         { name: '🤖 Admin/Bot', value: `${commands.bot.commands.length} cmds`, inline: true },
+        { name: '🟥 Roblox', value: `${commands.roblox.commands.length} cmds`, inline: true },
       )
       .setThumbnail(interaction.client.user.displayAvatarURL())
       .setFooter({ text: L('Usa /help category:<categoría> para ver comandos específicos', 'Use /help category:<category> to see specific commands') })

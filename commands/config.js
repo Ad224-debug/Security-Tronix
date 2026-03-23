@@ -36,6 +36,9 @@ module.exports = {
     .addSubcommand(s => s.setName('joincheck').setDescription('Canal para avisos de reputación al unirse')
       .addChannelOption(o => o.setName('channel').setDescription('Canal donde se enviarán los análisis').addChannelTypes(ChannelType.GuildText))
       .addBooleanOption(o => o.setName('disable').setDescription('Desactivar el sistema')))
+    .addSubcommand(s => s.setName('modrole').setDescription('Rol de moderadores (se pingea en reportes)')
+      .addRoleOption(o => o.setName('role').setDescription('Rol de moderadores').setRequired(false))
+      .addBooleanOption(o => o.setName('disable').setDescription('Desactivar (usar owner en su lugar)')))
     .addSubcommand(s => s.setName('antiraid').setDescription('Configurar sistema anti-raid')
       .addBooleanOption(o => o.setName('enabled').setDescription('Activar o desactivar').setRequired(true))
       .addIntegerOption(o => o.setName('threshold').setDescription('Joins para activar (default: 10)').setMinValue(3).setMaxValue(50))
@@ -210,6 +213,19 @@ module.exports = {
             )
             .setTimestamp()]
         });
+      }
+
+      // ── MODROLE ────────────────────────────────────────────────────────────
+      if (sub === 'modrole') {
+        const role = interaction.options.getRole('role');
+        const disable = interaction.options.getBoolean('disable');
+        if (disable) {
+          guildConfig.del(interaction.guild.id, 'modRole');
+          return interaction.editReply({ content: L('✅ Rol de moderadores eliminado. Los reportes pingearán al dueño.', '✅ Mod role removed. Reports will ping the owner.') });
+        }
+        if (!role) return interaction.editReply({ content: L('❌ Debes indicar un rol o usar `disable: true`.', '❌ You must provide a role or use `disable: true`.') });
+        guildConfig.set(interaction.guild.id, 'modRole', role.id);
+        return interaction.editReply({ content: L(`✅ Rol de moderadores configurado: ${role}. Se pingará en los reportes.`, `✅ Mod role set to ${role}. It will be pinged in reports.`) });
       }
 
       // ── JOINCHECK ──────────────────────────────────────────────────────────

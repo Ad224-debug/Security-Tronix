@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, AttachmentBuilder } = require('discord.js');
-const { createCase } = require('./case.js');
+const { createCase } = require('../utils/createCase');
 const fs = require('fs');
 const path = require('path');
 const guildConfig = require('../guild-config');
@@ -90,7 +90,9 @@ module.exports = {
       }
       await interaction.guild.members.ban(usuario, { deleteMessageSeconds: dias * 86400, reason: razon });
       const caseId = createCase(interaction.guild.id, 'ban', usuario.id, interaction.user.id, razon);
-      return interaction.reply({ embeds: [new EmbedBuilder().setTitle(L('🔨 Usuario Baneado','🔨 User Banned')).setThumbnail(usuario.displayAvatarURL()).addFields({ name: L('Usuario','User'), value: `${usuario} (${usuario.id})`, inline: true }, { name: L('Moderador','Moderator'), value: `${interaction.user}`, inline: true }, { name: L('Razón','Reason'), value: razon }, { name: L('Caso','Case'), value: `#${caseId}`, inline: true }).setColor(0xED4245).setTimestamp()] });
+      const banEmbed = new EmbedBuilder().setTitle(L('🔨 Usuario Baneado','🔨 User Banned')).setThumbnail(usuario.displayAvatarURL()).addFields({ name: L('Usuario','User'), value: `${usuario} (${usuario.id})`, inline: true }, { name: L('Moderador','Moderator'), value: `${interaction.user}`, inline: true }, { name: L('Razón','Reason'), value: razon }, { name: L('Caso','Case'), value: `#${caseId}`, inline: true }).setColor(0xED4245).setTimestamp();
+      await interaction.client.sendTypedLog(interaction.guild, 'bans', banEmbed);
+      return interaction.reply({ embeds: [banEmbed] });
     }
 
     // ── KICK ─────────────────────────────────────────────────────────────────
@@ -106,7 +108,9 @@ module.exports = {
       try { await usuario.send({ embeds: [new EmbedBuilder().setTitle(L('👢 Has sido expulsado','👢 You have been kicked')).setDescription(L(`Expulsado de **${interaction.guild.name}**`,`Kicked from **${interaction.guild.name}**`)).addFields({ name: L('Razón','Reason'), value: razon }, { name: L('Moderador','Moderator'), value: interaction.user.tag }).setColor(0xFEE75C).setTimestamp()] }); } catch {}
       await miembro.kick(razon);
       const caseId = createCase(interaction.guild.id, 'kick', usuario.id, interaction.user.id, razon);
-      return interaction.reply({ embeds: [new EmbedBuilder().setTitle(L('👢 Usuario Expulsado','👢 User Kicked')).setThumbnail(usuario.displayAvatarURL()).addFields({ name: L('Usuario','User'), value: `${usuario} (${usuario.id})`, inline: true }, { name: L('Moderador','Moderator'), value: `${interaction.user}`, inline: true }, { name: L('Razón','Reason'), value: razon }, { name: L('Caso','Case'), value: `#${caseId}`, inline: true }).setColor(0xFEE75C).setTimestamp()] });
+      const kickEmbed = new EmbedBuilder().setTitle(L('👢 Usuario Expulsado','👢 User Kicked')).setThumbnail(usuario.displayAvatarURL()).addFields({ name: L('Usuario','User'), value: `${usuario} (${usuario.id})`, inline: true }, { name: L('Moderador','Moderator'), value: `${interaction.user}`, inline: true }, { name: L('Razón','Reason'), value: razon }, { name: L('Caso','Case'), value: `#${caseId}`, inline: true }).setColor(0xFEE75C).setTimestamp();
+      await interaction.client.sendTypedLog(interaction.guild, 'kicks', kickEmbed);
+      return interaction.reply({ embeds: [kickEmbed] });
     }
 
     // ── SOFTBAN ──────────────────────────────────────────────────────────────
@@ -137,8 +141,11 @@ module.exports = {
       if (miembro) { try { await usuario.send({ embeds: [new EmbedBuilder().setTitle(L('⏰ Baneado temporalmente','⏰ Temporarily banned')).addFields({ name: L('Razón','Reason'), value: razon }, { name: L('Duración','Duration'), value: `${days} días` }, { name: L('Expira','Expires'), value: `<t:${Math.floor(expiresAt/1000)}:R>` }).setColor(0xFFA500).setTimestamp()] }); } catch {} }
       await interaction.guild.members.ban(usuario, { deleteMessageSeconds: deleteDays * 86400, reason: `[TEMPBAN ${days}d] ${razon}` });
       const caseId = createCase(interaction.guild.id, 'tempban', usuario.id, interaction.user.id, razon, `${days} días`, expiresAt);
+      // ⚠️ setTimeout no persiste entre reinicios — el cron job de tempban en index.js maneja el unban persistente
       setTimeout(async () => { try { await interaction.guild.members.unban(usuario.id, 'Tempban expirado'); } catch {} }, days * 86400000);
-      return interaction.editReply({ embeds: [new EmbedBuilder().setTitle(L('⏰ Baneo Temporal','⏰ Temporary Ban')).setThumbnail(usuario.displayAvatarURL()).addFields({ name: L('Usuario','User'), value: `${usuario} (${usuario.id})`, inline: true }, { name: L('Moderador','Moderator'), value: `${interaction.user}`, inline: true }, { name: L('Duración','Duration'), value: `${days} días`, inline: true }, { name: L('Razón','Reason'), value: razon }, { name: L('Expira','Expires'), value: `<t:${Math.floor(expiresAt/1000)}:F>` }, { name: L('Caso','Case'), value: `#${caseId}`, inline: true }).setColor(0xFFA500).setTimestamp()] });
+      const tempbanEmbed = new EmbedBuilder().setTitle(L('⏰ Baneo Temporal','⏰ Temporary Ban')).setThumbnail(usuario.displayAvatarURL()).addFields({ name: L('Usuario','User'), value: `${usuario} (${usuario.id})`, inline: true }, { name: L('Moderador','Moderator'), value: `${interaction.user}`, inline: true }, { name: L('Duración','Duration'), value: `${days} días`, inline: true }, { name: L('Razón','Reason'), value: razon }, { name: L('Expira','Expires'), value: `<t:${Math.floor(expiresAt/1000)}:F>` }, { name: L('Caso','Case'), value: `#${caseId}`, inline: true }).setColor(0xFFA500).setTimestamp();
+      await interaction.client.sendTypedLog(interaction.guild, 'bans', tempbanEmbed);
+      return interaction.editReply({ embeds: [tempbanEmbed] });
     }
 
     // ── WARN ─────────────────────────────────────────────────────────────────
@@ -158,7 +165,9 @@ module.exports = {
       const warnCount = warnings[key].length;
       const caseId = createCase(interaction.guild.id, 'warn', usuario.id, interaction.user.id, razon);
       try { await usuario.send({ embeds: [new EmbedBuilder().setTitle('⚠️ Has recibido una advertencia').setDescription(`En **${interaction.guild.name}**`).addFields({ name: 'Razón', value: razon }, { name: 'Total', value: `${warnCount}` }).setColor(0xFEE75C).setTimestamp()] }); } catch {}
-      await interaction.reply({ embeds: [new EmbedBuilder().setTitle('⚠️ Usuario Advertido').setThumbnail(usuario.displayAvatarURL()).addFields({ name: 'Usuario', value: `${usuario} (${usuario.id})`, inline: true }, { name: 'Moderador', value: `${interaction.user}`, inline: true }, { name: 'Razón', value: razon }, { name: 'Total advertencias', value: `${warnCount}`, inline: true }, { name: 'Caso', value: `#${caseId}`, inline: true }).setColor(0xFEE75C).setTimestamp()] });
+      const warnEmbed = new EmbedBuilder().setTitle('⚠️ Usuario Advertido').setThumbnail(usuario.displayAvatarURL()).addFields({ name: 'Usuario', value: `${usuario} (${usuario.id})`, inline: true }, { name: 'Moderador', value: `${interaction.user}`, inline: true }, { name: 'Razón', value: razon }, { name: 'Total advertencias', value: `${warnCount}`, inline: true }, { name: 'Caso', value: `#${caseId}`, inline: true }).setColor(0xFEE75C).setTimestamp();
+      await interaction.client.sendTypedLog(interaction.guild, 'warnings', warnEmbed);
+      await interaction.reply({ embeds: [warnEmbed] });
       const warnConfigPath = path.join(__dirname, '../warn-config.json');
       const warnConfigFile = fs.existsSync(warnConfigPath) ? JSON.parse(fs.readFileSync(warnConfigPath, 'utf8')) : {};
       const guildWarnCfg = guildConfig.get(interaction.guild.id, 'warnSetup') || warnConfigFile[interaction.guild.id] || { autoAction: 'none', autoActionThreshold: 3 };
@@ -204,7 +213,9 @@ module.exports = {
       try { await usuario.send({ embeds: [new EmbedBuilder().setTitle(L('⏱️ Has sido aislado','⏱️ You have been timed out')).addFields({ name: L('Razón','Reason'), value: reason }, { name: L('Duración','Duration'), value: `${duration} min` }, { name: L('Expira','Expires'), value: `<t:${Math.floor(expiresAt/1000)}:R>` }).setColor(0xFFA500).setTimestamp()] }); } catch {}
       await member.timeout(duration * 60000, reason);
       const caseId = createCase(interaction.guild.id, 'timeout', usuario.id, interaction.user.id, reason, `${duration} min`);
-      return interaction.reply({ embeds: [new EmbedBuilder().setTitle(L('⏱️ Usuario Aislado','⏱️ User Timed Out')).setThumbnail(usuario.displayAvatarURL()).addFields({ name: L('Usuario','User'), value: `${usuario} (${usuario.id})`, inline: true }, { name: L('Moderador','Moderator'), value: `${interaction.user}`, inline: true }, { name: L('Duración','Duration'), value: `${duration} min`, inline: true }, { name: L('Expira','Expires'), value: `<t:${Math.floor(expiresAt/1000)}:R>`, inline: true }, { name: L('Razón','Reason'), value: reason }, { name: L('Caso','Case'), value: `#${caseId}`, inline: true }).setColor(0xFFA500).setTimestamp()] });
+      const timeoutEmbed = new EmbedBuilder().setTitle(L('⏱️ Usuario Aislado','⏱️ User Timed Out')).setThumbnail(usuario.displayAvatarURL()).addFields({ name: L('Usuario','User'), value: `${usuario} (${usuario.id})`, inline: true }, { name: L('Moderador','Moderator'), value: `${interaction.user}`, inline: true }, { name: L('Duración','Duration'), value: `${duration} min`, inline: true }, { name: L('Expira','Expires'), value: `<t:${Math.floor(expiresAt/1000)}:R>`, inline: true }, { name: L('Razón','Reason'), value: reason }, { name: L('Caso','Case'), value: `#${caseId}`, inline: true }).setColor(0xFFA500).setTimestamp();
+      await interaction.client.sendTypedLog(interaction.guild, 'timeouts', timeoutEmbed);
+      return interaction.reply({ embeds: [timeoutEmbed] });
     }
 
     // ── UNTIMEOUT ────────────────────────────────────────────────────────────

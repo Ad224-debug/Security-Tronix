@@ -3,94 +3,70 @@ const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('disc
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('role')
-    .setDescription('Manages user roles')
+    .setDescription('Gestiona roles de usuarios / Manages user roles')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles)
     .addStringOption(option =>
       option.setName('action')
-        .setDescription('Action to perform')
+        .setDescription('Acción a realizar / Action to perform')
         .setRequired(true)
         .addChoices(
-          { name: 'Add role', value: 'add' },
-          { name: 'Remove role', value: 'remove' }
+          { name: 'Agregar rol / Add role', value: 'add' },
+          { name: 'Remover rol / Remove role', value: 'remove' }
         ))
     .addUserOption(option =>
       option.setName('user')
-        .setDescription('User to modify roles')
+        .setDescription('Usuario a modificar / User to modify')
         .setRequired(true))
     .addRoleOption(option =>
       option.setName('role')
-        .setDescription('Role to add or remove')
+        .setDescription('Rol a agregar o remover / Role to add or remove')
         .setRequired(true)),
   async execute(interaction) {
-    const getText = (key) => interaction.client.getText(interaction.guild.id, key);
-    
+    const lang = interaction.client.getLanguage(interaction.guild.id);
+    const L = (es, en) => lang === 'es' ? es : en;
+
     if (!interaction.member.permissions.has(PermissionFlagsBits.ManageRoles)) {
-      return await interaction.reply({
-        content: getText('no_permission'),
-        ephemeral: true
-      });
+      return interaction.reply({ content: L('❌ No tienes permiso para gestionar roles.', '❌ You do not have permission to manage roles.'), ephemeral: true });
     }
 
     const accion = interaction.options.getString('action');
     const usuario = interaction.options.getUser('user');
     const rol = interaction.options.getRole('role');
-    
+
     let miembro;
     try {
       miembro = await interaction.guild.members.fetch(usuario.id);
-    } catch (error) {
-      return await interaction.reply({
-        content: getText('error'),
-        ephemeral: true
-      });
+    } catch {
+      return interaction.reply({ content: L('❌ No se pudo encontrar al usuario.', '❌ Could not find the user.'), ephemeral: true });
     }
 
     const botMember = await interaction.guild.members.fetch(interaction.client.user.id);
     if (botMember.roles.highest.position <= rol.position) {
-      return await interaction.reply({
-        content: getText('error'),
-        ephemeral: true
-      });
+      return interaction.reply({ content: L('❌ El bot no puede gestionar ese rol (jerarquía).', '❌ Bot cannot manage that role (hierarchy).'), ephemeral: true });
     }
-
-    if (interaction.member.roles.highest.position <= rol.position) {
-      return await interaction.reply({
-        content: getText('error'),
-        ephemeral: true
-      });
+    if (interaction.member.roles.highest.position <= rol.position && interaction.member.id !== interaction.guild.ownerId) {
+      return interaction.reply({ content: L('❌ No puedes gestionar un rol igual o superior al tuyo.', '❌ You cannot manage a role equal or higher than yours.'), ephemeral: true });
     }
-
     if (miembro.id === interaction.guild.ownerId && interaction.member.id !== interaction.guild.ownerId) {
-      return await interaction.reply({
-        content: getText('error'),
-        ephemeral: true
-      });
+      return interaction.reply({ content: L('❌ No puedes modificar los roles del dueño del servidor.', '❌ You cannot modify the server owner\'s roles.'), ephemeral: true });
     }
-
     if (miembro.roles.highest.position >= interaction.member.roles.highest.position && interaction.member.id !== interaction.guild.ownerId) {
-      return await interaction.reply({
-        content: getText('error'),
-        ephemeral: true
-      });
+      return interaction.reply({ content: L('❌ No puedes modificar a alguien con igual o mayor jerarquía.', '❌ You cannot modify someone with equal or higher hierarchy.'), ephemeral: true });
     }
 
     try {
       if (accion === 'add') {
         if (miembro.roles.cache.has(rol.id)) {
-          return await interaction.reply({
-            content: `⚠️ ${usuario} already has the role ${rol}.`,
-            ephemeral: true
-          });
+          return interaction.reply({ content: L(`⚠️ ${usuario} ya tiene el rol ${rol}.`, `⚠️ ${usuario} already has the role ${rol}.`), ephemeral: true });
         }
-        
         await miembro.roles.add(rol);
-        await interaction.reply({
+        return interaction.reply({
           embeds: [new EmbedBuilder()
-            .setTitle(getText('role_assigned'))
-            .setDescription(`Gave role ${rol} to ${usuario}`)
+            .setTitle(L('✅ Rol Asignado', '✅ Role Assigned'))
+            .setDescription(L(`Se le dio el rol ${rol} a ${usuario}`, `Gave role ${rol} to ${usuario}`))
             .addFields(
-              { name: getText('moderator'), value: `${interaction.user}`, inline: true },
-              { name: 'Role position', value: `${rol.position}`, inline: true }
+              { name: L('Moderador', 'Moderator'), value: `${interaction.user}`, inline: true },
+              { name: L('Posición del rol', 'Role position'), value: `${rol.position}`, inline: true }
             )
             .setColor(0x57F287)
             .setTimestamp()
@@ -98,18 +74,14 @@ module.exports = {
         });
       } else {
         if (!miembro.roles.cache.has(rol.id)) {
-          return await interaction.reply({
-            content: `⚠️ ${usuario} doesn't have the role ${rol}.`,
-            ephemeral: true
-          });
+          return interaction.reply({ content: L(`⚠️ ${usuario} no tiene el rol ${rol}.`, `⚠️ ${usuario} doesn't have the role ${rol}.`), ephemeral: true });
         }
-        
         await miembro.roles.remove(rol);
-        await interaction.reply({
+        return interaction.reply({
           embeds: [new EmbedBuilder()
-            .setTitle(getText('role_removed'))
-            .setDescription(`Removed role ${rol} from ${usuario}`)
-            .addFields({ name: getText('moderator'), value: `${interaction.user}`, inline: true })
+            .setTitle(L('✅ Rol Removido', '✅ Role Removed'))
+            .setDescription(L(`Se removió el rol ${rol} de ${usuario}`, `Removed role ${rol} from ${usuario}`))
+            .addFields({ name: L('Moderador', 'Moderator'), value: `${interaction.user}`, inline: true })
             .setColor(0xED4245)
             .setTimestamp()
           ]
@@ -117,10 +89,7 @@ module.exports = {
       }
     } catch (error) {
       console.error('Error en comando role:', error);
-      await interaction.reply({
-        content: getText('error'),
-        ephemeral: true
-      });
+      return interaction.reply({ content: L('❌ Ocurrió un error al modificar el rol.', '❌ An error occurred while modifying the role.'), ephemeral: true });
     }
   },
 };
