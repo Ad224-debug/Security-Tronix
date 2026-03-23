@@ -1,6 +1,5 @@
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
 const { joinVoiceChannel, getVoiceConnection } = require('@discordjs/voice');
-const { sendModLog } = require('./modsetup.js');
 const { createCase } = require('./case.js');
 const fs = require('fs');
 const path = require('path');
@@ -68,7 +67,7 @@ module.exports = {
       const caseId = createCase(interaction.guild.id, 'vckick', usuario.id, interaction.user.id, razon);
       const embed = new EmbedBuilder().setTitle(L('🔊 Usuario Expulsado de Voz','🔊 User Kicked from Voice')).setThumbnail(usuario.displayAvatarURL()).addFields({ name: L('Usuario','User'), value: `${usuario} (${usuario.id})`, inline: true }, { name: L('Canal','Channel'), value: voiceChannel.name, inline: true }, { name: L('Moderador','Moderator'), value: `${interaction.user}`, inline: true }, { name: L('Razón','Reason'), value: razon }, { name: L('Caso','Case'), value: `#${caseId}`, inline: true }).setColor(0xFEE75C).setTimestamp();
       await interaction.reply({ embeds: [embed] });
-      await sendModLog(interaction.client, interaction.guild.id, 'kicks', embed);
+      await interaction.client.sendTypedLog(interaction.guild, 'kicks', embed);
       return;
     }
 
@@ -82,7 +81,7 @@ module.exports = {
       await miembro.voice.setMute(true, razon);
       const embed = new EmbedBuilder().setTitle(L('🔇 Usuario Muteado en Voz','🔇 User Muted in Voice')).addFields({ name: L('Usuario','User'), value: `${usuario}`, inline: true }, { name: L('Canal','Channel'), value: miembro.voice.channel.name, inline: true }, { name: L('Moderador','Moderator'), value: `${interaction.user}`, inline: true }, { name: L('Razón','Reason'), value: razon }).setColor(0xED4245).setTimestamp();
       await interaction.reply({ embeds: [embed] });
-      await sendModLog(interaction.client, interaction.guild.id, 'timeouts', embed);
+      await interaction.client.sendTypedLog(interaction.guild, 'timeouts', embed);
       return;
     }
 
@@ -121,7 +120,7 @@ module.exports = {
       try { await usuario.send({ embeds: [new EmbedBuilder().setTitle(L('🔇 Baneado de canal de voz','🔇 Banned from voice channel')).addFields({ name: L('Canal','Channel'), value: channel.name }, { name: L('Razón','Reason'), value: razon }).setColor(0xED4245).setTimestamp()] }); } catch {}
       const embed = new EmbedBuilder().setTitle(L('🔇 Usuario Baneado de Voz','🔇 User Banned from Voice')).setThumbnail(usuario.displayAvatarURL()).addFields({ name: L('Usuario','User'), value: `${usuario} (${usuario.id})`, inline: true }, { name: L('Canal','Channel'), value: channel.name, inline: true }, { name: L('Moderador','Moderator'), value: `${interaction.user}`, inline: true }, { name: L('Razón','Reason'), value: razon }, { name: L('Caso','Case'), value: `#${caseId}`, inline: true }).setColor(0xED4245).setTimestamp();
       await interaction.reply({ embeds: [embed] });
-      await sendModLog(interaction.client, interaction.guild.id, 'bans', embed);
+      await interaction.client.sendTypedLog(interaction.guild, 'bans', embed);
       return;
     }
   }

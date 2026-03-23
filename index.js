@@ -791,9 +791,48 @@ client.on('guildMemberAdd', async (member) => {
     await checkRaid(member, sendLog).catch(err => console.error('[antiraid]', err));
     await runAltCheck(member, sendLog).catch(err => console.error('[altcheck]', err));
   }
+
+  // ── Role Restore: restaurar roles si el usuario vuelve a entrar ──────────
+  try {
+    const stored = guildConfig.get(member.guild.id, 'roleRestore') || {};
+    if (stored[member.id]) {
+      const { roles: savedRoles } = stored[member.id];
+      const validRoles = savedRoles.filter(id => member.guild.roles.cache.has(id));
+      if (validRoles.length > 0) {
+        await member.roles.set(validRoles, 'Role Restore: usuario volvió al servidor');
+        const logEmbed = new EmbedBuilder()
+          .setTitle('🔄 Roles Restaurados')
+          .setColor(0x5865F2)
+          .setThumbnail(member.user.displayAvatarURL())
+          .addFields(
+            { name: '👤 Usuario', value: `${member.user.tag} (<@${member.id}>)`, inline: true },
+            { name: '🎭 Roles restaurados', value: `${validRoles.length}`, inline: true }
+          )
+          .setFooter({ text: 'Role Restore automático' })
+          .setTimestamp();
+        await sendTypedLog(member.guild, 'members', logEmbed);
+      }
+      // Limpiar después de restaurar
+      delete stored[member.id];
+      guildConfig.set(member.guild.id, 'roleRestore', stored);
+    }
+  } catch (err) {
+    console.error('[roleRestore] Error restoring roles on rejoin:', err);
+  }
+
+  // ── Verificación de entrada ───────────────────────────────────────────────
+  try {
+    const { getConfig: getVerifyConfig, sendVerificationToMember } = require('./verification-system');
+    const verifyCfg = getVerifyConfig(member.guild.id);
+    if (verifyCfg?.enabled && !member.user.bot) {
+      await sendVerificationToMember(member, verifyCfg);
+    }
+  } catch (err) {
+    console.error('[verify] Error sending verification:', err);
+  }
 });
 
-// Log: Miembro se va
+// Log: Miembro se va + guardar roles para Role Restore
 client.on('guildMemberRemove', async (member) => {
   const embed = new EmbedBuilder()
     .setTitle('📤 Miembro Salió')
@@ -808,6 +847,21 @@ client.on('guildMemberRemove', async (member) => {
     .setTimestamp();
 
   await sendTypedLog(member.guild, 'members', embed);
+
+  // ── Role Restore: guardar roles al salir ──────────────────────────────────
+  try {
+    const roleIds = member.roles.cache
+      .filter(r => r.id !== member.guild.id) // excluir @everyone
+      .map(r => r.id);
+
+    if (roleIds.length > 0) {
+      const stored = guildConfig.get(member.guild.id, 'roleRestore') || {};
+      stored[member.id] = { roles: roleIds, leftAt: Date.now(), tag: member.user.tag };
+      guildConfig.set(member.guild.id, 'roleRestore', stored);
+    }
+  } catch (err) {
+    console.error('[roleRestore] Error saving roles on leave:', err);
+  }
 });
 
 // Log: Usuario baneado
@@ -1508,6 +1562,17 @@ client.on('interactionCreate', async (interaction) => {
     } catch (error) {
       console.error('Error en report button:', error);
       await interaction.reply({ content: '❌ Error al procesar la acción.', ephemeral: true });
+    }
+    return;
+  }
+
+  // Manejar botones y modals de verificación
+  if ((interaction.isButton() || interaction.isModalSubmit()) && interaction.customId?.startsWith('verify_')) {
+    try {
+      const { handleVerifyInteraction } = require('./verification-system');
+      await handleVerifyInteraction(interaction, client);
+    } catch (e) {
+      console.error('Error en verify interaction:', e);
     }
     return;
   }

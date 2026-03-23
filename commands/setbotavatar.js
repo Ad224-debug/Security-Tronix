@@ -3,20 +3,19 @@ const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('disc
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('setbotavatar')
-    .setDescription('Cambia el avatar del bot (Owner only)')
+    .setDescription('Cambia el avatar del bot en este servidor (Owner only)')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addAttachmentOption(option =>
       option.setName('image')
-        .setDescription('Nueva imagen para el avatar del bot')
+        .setDescription('Nueva imagen para el avatar del bot en este servidor')
         .setRequired(true)),
 
   async execute(interaction) {
     const lang = interaction.client.getLanguage(interaction.guild.id);
 
-    // Solo el owner puede usar este comando
     if (interaction.user.id !== interaction.guild.ownerId) {
-      return await interaction.reply({
-        content: lang === 'es' 
+      return interaction.reply({
+        content: lang === 'es'
           ? '❌ Solo el dueño del servidor puede usar este comando.'
           : '❌ Only the server owner can use this command.',
         ephemeral: true
@@ -25,9 +24,8 @@ module.exports = {
 
     const attachment = interaction.options.getAttachment('image');
 
-    // Verificar que sea una imagen
-    if (!attachment.contentType || !attachment.contentType.startsWith('image/')) {
-      return await interaction.reply({
+    if (!attachment.contentType?.startsWith('image/')) {
+      return interaction.reply({
         content: lang === 'es'
           ? '❌ El archivo debe ser una imagen (PNG, JPG, GIF, etc.)'
           : '❌ The file must be an image (PNG, JPG, GIF, etc.)',
@@ -38,53 +36,33 @@ module.exports = {
     await interaction.deferReply({ ephemeral: true });
 
     try {
-      // Cambiar el avatar del bot
-      await interaction.client.user.setAvatar(attachment.url);
+      // Cambia el avatar solo en este servidor usando guild avatar
+      await interaction.guild.members.me.edit({ avatar: attachment.url });
 
-      const successEmbed = new EmbedBuilder()
+      const embed = new EmbedBuilder()
         .setTitle('✅ Avatar del Bot Actualizado')
         .setDescription(lang === 'es'
-          ? `El avatar del bot ha sido cambiado exitosamente.`
-          : `The bot's avatar has been changed successfully.`)
+          ? 'El avatar del bot fue cambiado solo en este servidor.'
+          : 'The bot avatar was changed only in this server.')
         .setColor(0x57F287)
-        .setThumbnail(interaction.client.user.displayAvatarURL({ size: 256 }))
+        .setThumbnail(interaction.guild.members.me.displayAvatarURL({ size: 256 }))
         .addFields(
-          { name: lang === 'es' ? '👤 Cambiado por' : '👤 Changed by', value: interaction.user.tag, inline: true }
+          { name: lang === 'es' ? '👤 Cambiado por' : '👤 Changed by', value: `${interaction.user}`, inline: true }
         )
-        .setFooter({ 
-          text: lang === 'es' 
-            ? '⚠️ Solo puedes cambiar el avatar 2 veces por hora' 
-            : '⚠️ You can only change the avatar 2 times per hour' 
-        })
+        .setFooter({ text: lang === 'es' ? 'Solo afecta a este servidor' : 'Only affects this server' })
         .setTimestamp();
 
-      await interaction.editReply({ embeds: [successEmbed] });
-
+      await interaction.editReply({ embeds: [embed] });
     } catch (error) {
-      console.error('Error changing bot avatar:', error);
+      console.error('Error changing bot guild avatar:', error);
 
-      let errorMessage = error.message;
-      
-      // Mensajes de error específicos
-      if (error.message.includes('rate limit')) {
-        errorMessage = lang === 'es'
-          ? 'Has alcanzado el límite de cambios de avatar. Solo puedes cambiar el avatar 2 veces por hora.'
-          : 'You have reached the avatar change limit. You can only change the avatar 2 times per hour.';
-      } else if (error.code === 50035) {
-        errorMessage = lang === 'es'
-          ? 'La imagen no es válida o es demasiado grande. Usa una imagen de menos de 8MB.'
-          : 'The image is invalid or too large. Use an image under 8MB.';
-      }
-
-      const errorEmbed = new EmbedBuilder()
-        .setTitle('❌ Error al Cambiar Avatar')
-        .setDescription(lang === 'es'
-          ? `No se pudo cambiar el avatar del bot:\n\`\`\`${errorMessage}\`\`\``
-          : `Could not change the bot's avatar:\n\`\`\`${errorMessage}\`\`\``)
-        .setColor(0xED4245)
-        .setTimestamp();
-
-      await interaction.editReply({ embeds: [errorEmbed] });
+      // Guild avatars requieren Nitro en el bot — informar claramente
+      const isNitroError = error.code === 50035 || error.message?.includes('avatar');
+      await interaction.editReply({
+        content: lang === 'es'
+          ? `❌ No se pudo cambiar el avatar: \`${isNitroError ? 'El bot necesita Nitro para tener avatares por servidor.' : error.message}\``
+          : `❌ Could not change avatar: \`${isNitroError ? 'Bot needs Nitro to have per-server avatars.' : error.message}\``
+      });
     }
   },
 };
