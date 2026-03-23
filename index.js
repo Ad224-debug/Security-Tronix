@@ -402,7 +402,21 @@ client.on('messageCreate', async (message) => {
 
   // Ejecutar sistemas de seguridad adicionales (anti-spam, phishing)
   await runSecurityChecks(message, sendLog);
-  
+
+  // ── Auto-respuestas (triggers) ────────────────────────────────────────────
+  try {
+    const triggerCmd = client.commands.get('trigger');
+    if (triggerCmd) {
+      const match = triggerCmd.findTrigger(message.guild.id, message.content);
+      if (match) {
+        const response = triggerCmd.buildTriggerResponse(match);
+        await message.reply({ ...response, allowedMentions: { repliedUser: false } });
+      }
+    }
+  } catch (err) {
+    console.error('[trigger] Error:', err);
+  }
+
   // Guardar información del mensaje en cache
   messageCache.set(message.id, {
     content: message.content,
@@ -1573,6 +1587,17 @@ client.on('interactionCreate', async (interaction) => {
       await handleVerifyInteraction(interaction, client);
     } catch (e) {
       console.error('Error en verify interaction:', e);
+    }
+    return;
+  }
+
+  // Manejar botones y modals de triggers
+  if ((interaction.isButton() || interaction.isModalSubmit()) && interaction.customId?.startsWith('trigger_')) {
+    try {
+      const triggerCmd = client.commands.get('trigger');
+      if (triggerCmd?.handleInteraction) await triggerCmd.handleInteraction(interaction);
+    } catch (e) {
+      console.error('Error en trigger interaction:', e);
     }
     return;
   }
