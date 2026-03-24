@@ -1005,6 +1005,16 @@ client.on('guildMemberUpdate', async (oldMember, newMember) => {
   const oldTimeout = oldMember.communicationDisabledUntilTimestamp;
   const newTimeout = newMember.communicationDisabledUntilTimestamp;
   if (!oldTimeout && newTimeout && newTimeout > Date.now()) {
+    // Buscar en audit log quién aplicó el timeout y la razón
+    let moderator = null, reason = 'No especificada';
+    try {
+      const auditLogs = await newMember.guild.fetchAuditLogs({ limit: 1, type: 24 }); // MEMBER_UPDATE
+      const entry = auditLogs.entries.first();
+      if (entry && entry.target.id === newMember.id && Date.now() - entry.createdTimestamp < 5000) {
+        moderator = entry.executor;
+        reason = entry.reason || 'No especificada';
+      }
+    } catch { /* skip */ }
     const embed = new EmbedBuilder()
       .setTitle('⏱️ Timeout Aplicado')
       .setColor(0xFFA500)
@@ -1012,18 +1022,29 @@ client.on('guildMemberUpdate', async (oldMember, newMember) => {
       .addFields(
         { name: '👤 Usuario', value: `${newMember.user.tag} (<@${newMember.id}>)`, inline: true },
         { name: '🆔 ID', value: newMember.id, inline: true },
-        { name: '⏰ Expira', value: `<t:${Math.floor(newTimeout / 1000)}:R>`, inline: true }
+        { name: '⏰ Expira', value: `<t:${Math.floor(newTimeout / 1000)}:R>`, inline: true },
+        { name: '🛡️ Moderador', value: moderator ? `${moderator.tag} (<@${moderator.id}>)` : 'Desconocido', inline: true },
+        { name: '📝 Razón', value: reason, inline: true }
       )
       .setTimestamp();
     await sendTypedLog(newMember.guild, 'timeouts', embed);
   } else if (oldTimeout && (!newTimeout || newTimeout <= Date.now())) {
+    let moderator = null;
+    try {
+      const auditLogs = await newMember.guild.fetchAuditLogs({ limit: 1, type: 24 });
+      const entry = auditLogs.entries.first();
+      if (entry && entry.target.id === newMember.id && Date.now() - entry.createdTimestamp < 5000) {
+        moderator = entry.executor;
+      }
+    } catch { /* skip */ }
     const embed = new EmbedBuilder()
       .setTitle('✅ Timeout Removido')
       .setColor(0x57F287)
       .setThumbnail(newMember.user.displayAvatarURL())
       .addFields(
         { name: '👤 Usuario', value: `${newMember.user.tag} (<@${newMember.id}>)`, inline: true },
-        { name: '🆔 ID', value: newMember.id, inline: true }
+        { name: '🆔 ID', value: newMember.id, inline: true },
+        { name: '🛡️ Moderador', value: moderator ? `${moderator.tag} (<@${moderator.id}>)` : 'Desconocido', inline: true }
       )
       .setTimestamp();
     await sendTypedLog(newMember.guild, 'timeouts', embed);
@@ -1454,7 +1475,72 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
   if (embed) await sendTypedLog(newState.guild || oldState.guild, 'voice', embed);
 });
 
+// Log: Webhooks creados/eliminados
+client.on('webhookUpdate', async (channel) => {
+  if (!channel.guild) return;
+  try {
+    const webhooks = await channel.fetchWebhooks();
+    // Usar audit log para saber si fue create o delete y quién lo hizo
+    const logs = await channel.guild.fetchAuditLogs({ limit: 1, type: 50 }).catch(() => null); // WEBHOOK_CREATE
+    const logsD = await channel.guild.fetchAuditLogs({ limit: 1, type: 52 }).catch(() => null); // WEBHOOK_DELETE
+    const entryC = logs?.entries.first();
+    const entryD = logsD?.entries.first();
+    // Determinar cuál es más reciente
+    const isCreate = entryC && (!entryD || entryC.createdTimestamp > entryD.createdTimestamp);
+    const entry = isCreate ? entryC : entryD;
+    const embed = new EmbedBuilder()
+      .setTitle(isCreate ? '🔌 Webhook Creado' : '🔌 Webhook Eliminado')
+      .setColor(isCreate ? 0x57F287 : 0xED4245)
+      .addFields(
+        { name: '📍 Canal', value: `<#${channel.id}>`, inline: true },
+        { name: '👤 Por', value: entry?.executor ? `${entry.executor.tag} (<@${entry.executor.id}>)` : 'Desconocido', inline: true },
+        { name: '🔌 Nombre', value: entry?.target?.name || 'Desconocido', inline: true }
+      )
+      .setTimestamp();
+    await sendTypedLog(channel.guild, 'webhooks', embed);
+  } catch { /* skip */ }
+});
+
+// Log: Mensajes fijados/desfijados
+client.on('channelPinsUpdate', async (channel, time) => {
+  if (!channel.guild) return;
+  try {
+    const logs = await channel.guild.fetchAuditLogs({ limit: 1, type: 74 }).catch(() => null); // MESSAGE_PIN
+    const entry = logs?.entries.first();
+    const embed = new EmbedBuilder()
+      .setTitle('📌 Mensaje Fijado/Desfijado')
+      .setColor(0xFEE75C)
+      .addFields(
+        { name: '📍 Canal', value: `<#${channel.id}>`, inline: true },
+        { name: '👤 Por', value: entry?.executor ? `${entry.executor.tag} (<@${entry.executor.id}>)` : 'Desconocido', inline: true }
+      )
+      .setTimestamp();
+    await sendTypedLog(channel.guild, 'pins', embed);
+  } catch { /* skip */ }
+});
+
 // ==================== FIN SISTEMA DE LOGS ====================
+
+// Log: Uso de comandos slash
+client.on('interactionCreate', async (interaction) => {
+  if (!interaction.isChatInputCommand()) return;
+  if (!interaction.guild) return;
+  const sub = interaction.options.getSubcommand(false);
+  const subGroup = interaction.options.getSubcommandGroup(false);
+  const fullCmd = ['/' + interaction.commandName, subGroup, sub].filter(Boolean).join(' ');
+  const embed = new EmbedBuilder()
+    .setTitle('⌨️ Comando Usado')
+    .setColor(0x5865F2)
+    .setThumbnail(interaction.user.displayAvatarURL())
+    .addFields(
+      { name: '👤 Usuario', value: `${interaction.user.tag} (<@${interaction.user.id}>)`, inline: true },
+      { name: '⌨️ Comando', value: `\`${fullCmd}\``, inline: true },
+      { name: '📍 Canal', value: `<#${interaction.channel.id}>`, inline: true }
+    )
+    .setFooter({ text: `ID: ${interaction.user.id}` })
+    .setTimestamp();
+  await sendTypedLog(interaction.guild, 'commands', embed);
+});
 
 // Manejar comandos slash
 client.on('interactionCreate', async (interaction) => {

@@ -7,16 +7,19 @@ const guildConfig = require('../guild-config');
 
 // Definición de todos los tipos de log
 const LOG_TYPES = [
-  { id: 'messages', label: 'Mensajes',  emoji: '💬', desc: 'Edits, deletes, reacciones, purges' },
-  { id: 'voice',    label: 'Voz',       emoji: '🔊', desc: 'Join, leave, move entre canales' },
-  { id: 'members',  label: 'Miembros',  emoji: '👥', desc: 'Join, leave, roles, apodos' },
-  { id: 'bans',     label: 'Bans',      emoji: '🔨', desc: 'Bans y unbans' },
-  { id: 'kicks',    label: 'Kicks',     emoji: '👢', desc: 'Expulsiones' },
-  { id: 'warnings', label: 'Warnings',  emoji: '⚠️', desc: 'Advertencias' },
-  { id: 'timeouts', label: 'Timeouts',  emoji: '⏱️', desc: 'Timeouts aplicados/removidos' },
-  { id: 'automod',  label: 'Automod',   emoji: '🤖', desc: 'Acciones del automod' },
-  { id: 'server',   label: 'Servidor',  emoji: '🏠', desc: 'Canales, roles, emojis, guild' },
-  { id: 'invites',  label: 'Invites',   emoji: '🔗', desc: 'Invitaciones creadas/eliminadas' },
+  { id: 'messages',  label: 'Mensajes',  emoji: '💬', desc: 'Edits, deletes, reacciones, purges' },
+  { id: 'voice',     label: 'Voz',       emoji: '🔊', desc: 'Join, leave, move entre canales' },
+  { id: 'members',   label: 'Miembros',  emoji: '👥', desc: 'Join, leave, roles, apodos' },
+  { id: 'bans',      label: 'Bans',      emoji: '🔨', desc: 'Bans y unbans' },
+  { id: 'kicks',     label: 'Kicks',     emoji: '👢', desc: 'Expulsiones' },
+  { id: 'warnings',  label: 'Warnings',  emoji: '⚠️', desc: 'Advertencias' },
+  { id: 'timeouts',  label: 'Timeouts',  emoji: '⏱️', desc: 'Timeouts aplicados/removidos' },
+  { id: 'automod',   label: 'Automod',   emoji: '🤖', desc: 'Acciones del automod' },
+  { id: 'server',    label: 'Servidor',  emoji: '🏠', desc: 'Canales, roles, emojis, guild' },
+  { id: 'invites',   label: 'Invites',   emoji: '🔗', desc: 'Invitaciones creadas/eliminadas' },
+  { id: 'commands',  label: 'Comandos',  emoji: '⌨️', desc: 'Uso de comandos slash' },
+  { id: 'webhooks',  label: 'Webhooks',  emoji: '🔌', desc: 'Webhooks creados/eliminados' },
+  { id: 'pins',      label: 'Pins',      emoji: '📌', desc: 'Mensajes fijados/desfijados' },
 ];
 
 function loadLogs(guildId) {
