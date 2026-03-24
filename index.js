@@ -211,7 +211,7 @@ const cron = require('node-cron');
 
 let eventManager, rsvpManager, roleManager, reminderScheduler, statsTracker;
 
-client.once('ready', () => {
+client.once('clientReady', () => {
   console.log(`✅ Bot conectado como ${client.user.tag}`);
   
   // Inicializar managers de eventos
@@ -1557,7 +1557,7 @@ client.on('interactionCreate', async (interaction) => {
       if (!eventManager || !rsvpManager || !roleManager) {
         return await interaction.reply({
           content: '❌ El sistema de eventos no está inicializado',
-          ephemeral: true
+          flags: 64
         });
       }
 
@@ -1565,7 +1565,7 @@ client.on('interactionCreate', async (interaction) => {
       if (!event) {
         return await interaction.reply({
           content: '❌ Este evento ya no existe',
-          ephemeral: true
+          flags: 64
         });
       }
 
@@ -1612,7 +1612,7 @@ client.on('interactionCreate', async (interaction) => {
 
       await interaction.reply({
         content: message,
-        ephemeral: true
+        flags: 64
       });
 
       // Si alguien fue promovido del waitlist (ya lo hace handleRSVP internamente),
@@ -1644,7 +1644,7 @@ client.on('interactionCreate', async (interaction) => {
       console.error('Error handling RSVP:', error);
       await interaction.reply({
         content: `❌ ${error.message}`,
-        ephemeral: true
+        flags: 64
       });
     }
     return;
@@ -1654,7 +1654,7 @@ client.on('interactionCreate', async (interaction) => {
   if (interaction.isButton() && interaction.customId?.startsWith('report_action_')) {
     try {
       if (!interaction.member.permissions.has(PermissionFlagsBits.ModerateMembers)) {
-        return await interaction.reply({ content: '❌ No tienes permisos para gestionar reportes.', ephemeral: true });
+        return await interaction.reply({ content: '❌ No tienes permisos para gestionar reportes.', flags: 64 });
       }
 
       const parts = interaction.customId.split('_');
@@ -1670,12 +1670,12 @@ client.on('interactionCreate', async (interaction) => {
           .setColor(0x808080)
           .setFooter({ text: `Report ID: ${reportId} • ${L('Descartado por', 'Dismissed by')} ${interaction.user.tag}` });
         await interaction.message.edit({ embeds: [embed], components: [] });
-        return await interaction.reply({ content: L('✅ Reporte descartado.', '✅ Report dismissed.'), ephemeral: true });
+        return await interaction.reply({ content: L('✅ Reporte descartado.', '✅ Report dismissed.'), flags: 64 });
       }
 
       const member = await interaction.guild.members.fetch(userId).catch(() => null);
       if (!member) {
-        return await interaction.reply({ content: L('❌ No se encontró al usuario reportado.', '❌ Reported user not found.'), ephemeral: true });
+        return await interaction.reply({ content: L('❌ No se encontró al usuario reportado.', '❌ Reported user not found.'), flags: 64 });
       }
 
       if (action === 'warn') {
@@ -1698,10 +1698,10 @@ client.on('interactionCreate', async (interaction) => {
         .setColor(0x57F287)
         .setFooter({ text: `Report ID: ${reportId} • ${L('Acción', 'Action')}: ${actionLabels[action]} por ${interaction.user.tag}` });
       await interaction.message.edit({ embeds: [embed], components: [] });
-      await interaction.reply({ content: L(`✅ Acción **${actionLabels[action]}** aplicada.`, `✅ Action **${actionLabels[action]}** applied.`), ephemeral: true });
+      await interaction.reply({ content: L(`✅ Acción **${actionLabels[action]}** aplicada.`, `✅ Action **${actionLabels[action]}** applied.`), flags: 64 });
     } catch (error) {
       console.error('Error en report button:', error);
-      await interaction.reply({ content: '❌ Error al procesar la acción.', ephemeral: true });
+      await interaction.reply({ content: '❌ Error al procesar la acción.', flags: 64 });
     }
     return;
   }
@@ -1776,7 +1776,7 @@ client.on('interactionCreate', async (interaction) => {
     console.warn(`[CMD] Permiso denegado para ${interaction.commandName} a ${interaction.user.tag}`);
     return await interaction.reply({
       content: getText(interaction.guild.id, 'cmd_perm_denied'),
-      ephemeral: true
+      flags: 64
     });
   }
 
@@ -1786,7 +1786,7 @@ client.on('interactionCreate', async (interaction) => {
     console.error(`[CMD ERROR] /${interaction.commandName}:`, error);
     const errorMessage = {
       content: '❌ Hubo un error al ejecutar este comando.',
-      ephemeral: true
+      flags: 64
     };
     
     if (interaction.replied || interaction.deferred) {

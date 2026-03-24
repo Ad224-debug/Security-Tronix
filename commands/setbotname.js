@@ -20,14 +20,14 @@ module.exports = {
         content: lang === 'es'
           ? '❌ Solo el dueño del servidor puede usar este comando.'
           : '❌ Only the server owner can use this command.',
-        ephemeral: true
+        flags: 64
       });
     }
 
     const newNick = interaction.options.getString('name') ?? null;
     const oldNick = interaction.guild.members.me.nickname ?? interaction.client.user.username;
 
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: 64 });
 
     try {
       // Cambia solo el nickname en este servidor, no el nombre global del bot

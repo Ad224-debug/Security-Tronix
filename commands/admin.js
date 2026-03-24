@@ -37,7 +37,7 @@ module.exports = {
     // ── CLEAR ────────────────────────────────────────────────────────────────
     if (sub === 'clear') {
       const cantidad = interaction.options.getInteger('amount');
-      await interaction.deferReply({ ephemeral: true });
+      await interaction.deferReply({ flags: 64 });
       try {
         const fetched = await interaction.channel.messages.fetch({ limit: cantidad });
         if (fetched.size === 0) return interaction.editReply({ content: L('❌ No hay mensajes.', '❌ No messages.') });
@@ -67,9 +67,9 @@ module.exports = {
 
     // ── NUKE ─────────────────────────────────────────────────────────────────
     if (sub === 'nuke') {
-      if (interaction.user.id !== interaction.guild.ownerId) return interaction.reply({ content: L('❌ Solo el dueño puede usar esto.', '❌ Owner only.'), ephemeral: true });
+      if (interaction.user.id !== interaction.guild.ownerId) return interaction.reply({ content: L('❌ Solo el dueño puede usar esto.', '❌ Owner only.'), flags: 64 });
       const channel = interaction.channel;
-      await interaction.reply({ content: L('💣 Nukeando en 3 segundos...', '💣 Nuking in 3 seconds...'), ephemeral: true });
+      await interaction.reply({ content: L('💣 Nukeando en 3 segundos...', '💣 Nuking in 3 seconds...'), flags: 64 });
       await new Promise(r => setTimeout(r, 3000));
       try {
         const newChannel = await channel.clone({ reason: `Nukeado por ${interaction.user.tag}` });
@@ -91,15 +91,15 @@ module.exports = {
       const embed = new EmbedBuilder().setTitle(`📢 ${title}`).setDescription(message).setColor(color).setFooter({ text: `${interaction.user.username}` }).setTimestamp();
       try {
         await channel.send({ content: mention ? '@everyone' : null, embeds: [embed] });
-        return interaction.reply({ content: L(`✅ Anuncio enviado a ${channel}.`, `✅ Announcement sent to ${channel}.`), ephemeral: true });
-      } catch { return interaction.reply({ content: L('❌ No pude enviar el anuncio.', '❌ Could not send announcement.'), ephemeral: true }); }
+        return interaction.reply({ content: L(`✅ Anuncio enviado a ${channel}.`, `✅ Announcement sent to ${channel}.`), flags: 64 });
+      } catch { return interaction.reply({ content: L('❌ No pude enviar el anuncio.', '❌ Could not send announcement.'), flags: 64 }); }
     }
 
     // ── DM ───────────────────────────────────────────────────────────────────
     if (sub === 'dm') {
       const destino = interaction.options.getString('target');
       const mensaje = interaction.options.getString('message');
-      await interaction.deferReply({ ephemeral: true });
+      await interaction.deferReply({ flags: 64 });
       const dmEmbed = new EmbedBuilder().setTitle(`📨 Mensaje de ${interaction.guild.name}`).setDescription(mensaje).setColor(0x3498DB).setFooter({ text: `Enviado por ${interaction.user.tag}` }).setTimestamp();
       if (destino.toLowerCase() === 'all') {
         let enviados = 0, fallidos = 0;
@@ -126,7 +126,7 @@ module.exports = {
       const palabra = interaction.options.getString('word').toLowerCase();
       const canal = interaction.options.getChannel('channel') || interaction.channel;
       const limite = interaction.options.getInteger('limit') || 100;
-      await interaction.deferReply({ ephemeral: true });
+      await interaction.deferReply({ flags: 64 });
       let eliminados = 0, revisados = 0, lastId = null;
       while (revisados < limite) {
         const fetchLimit = Math.min(100, limite - revisados);
@@ -150,35 +150,35 @@ module.exports = {
 
     // ── BACKUP ───────────────────────────────────────────────────────────────
     if (sub === 'backup') {
-      if (interaction.user.id !== interaction.guild.ownerId) return interaction.reply({ content: L('❌ Solo el dueño puede usar esto.', '❌ Owner only.'), ephemeral: true });
+      if (interaction.user.id !== interaction.guild.ownerId) return interaction.reply({ content: L('❌ Solo el dueño puede usar esto.', '❌ Owner only.'), flags: 64 });
       const action = interaction.options.getString('action');
       const backupName = interaction.options.getString('name');
       const backupSystem = new BackupSystem(interaction.client);
 
       if (action === 'create') {
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: 64 });
         const result = await backupSystem.createBackup(interaction.guild.id);
         if (result.success) return interaction.editReply({ embeds: [new EmbedBuilder().setTitle(L('✅ Backup Creado','✅ Backup Created')).addFields({ name: L('Nombre','Name'), value: `\`${result.backupName}\``, inline: true }, { name: L('Archivos','Files'), value: `\`${result.files}\``, inline: true }).setColor(0x57F287).setTimestamp()] });
         return interaction.editReply({ content: `❌ Error: ${result.error}` });
       }
       if (action === 'list') {
         const backups = backupSystem.listBackups();
-        if (backups.length === 0) return interaction.reply({ content: L('📭 No hay backups.', '📭 No backups.'), ephemeral: true });
+        if (backups.length === 0) return interaction.reply({ content: L('📭 No hay backups.', '📭 No backups.'), flags: 64 });
         const desc = backups.slice(0, 10).map((b, i) => `**${i+1}.** \`${b.name}\` — ${new Date(b.timestamp).toLocaleString()}`).join('\n');
-        return interaction.reply({ embeds: [new EmbedBuilder().setTitle(L('📦 Backups','📦 Backups')).setDescription(desc).setColor(0x5865F2).setFooter({ text: `Total: ${backups.length}` }).setTimestamp()], ephemeral: true });
+        return interaction.reply({ embeds: [new EmbedBuilder().setTitle(L('📦 Backups','📦 Backups')).setDescription(desc).setColor(0x5865F2).setFooter({ text: `Total: ${backups.length}` }).setTimestamp()], flags: 64 });
       }
       if (action === 'restore') {
-        if (!backupName) return interaction.reply({ content: '❌ Especifica el nombre del backup.', ephemeral: true });
-        await interaction.deferReply({ ephemeral: true });
+        if (!backupName) return interaction.reply({ content: '❌ Especifica el nombre del backup.', flags: 64 });
+        await interaction.deferReply({ flags: 64 });
         const result = await backupSystem.restoreBackup(backupName);
         if (result.success) return interaction.editReply({ content: L(`✅ Backup \`${backupName}\` restaurado. Reinicia el bot.`, `✅ Backup \`${backupName}\` restored. Restart the bot.`) });
         return interaction.editReply({ content: `❌ Error: ${result.error}` });
       }
       if (action === 'delete') {
-        if (!backupName) return interaction.reply({ content: '❌ Especifica el nombre del backup.', ephemeral: true });
+        if (!backupName) return interaction.reply({ content: '❌ Especifica el nombre del backup.', flags: 64 });
         const result = backupSystem.deleteBackup(backupName);
-        if (result.success) return interaction.reply({ content: L(`✅ Backup \`${backupName}\` eliminado.`, `✅ Backup \`${backupName}\` deleted.`), ephemeral: true });
-        return interaction.reply({ content: `❌ Error: ${result.error}`, ephemeral: true });
+        if (result.success) return interaction.reply({ content: L(`✅ Backup \`${backupName}\` eliminado.`, `✅ Backup \`${backupName}\` deleted.`), flags: 64 });
+        return interaction.reply({ content: `❌ Error: ${result.error}`, flags: 64 });
       }
     }
   }

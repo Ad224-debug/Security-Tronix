@@ -67,7 +67,7 @@ module.exports = {
 
   async execute(interaction) {
     const { embed, components } = buildPanel(interaction.guild.id);
-    await interaction.reply({ embeds: [embed], components, ephemeral: true });
+    await interaction.reply({ embeds: [embed], components, flags: 64 });
   },
 
   async handleInteraction(interaction) {
@@ -157,7 +157,7 @@ module.exports = {
       if (triggers.find(t => t.keyword === keyword)) {
         const { embed, components } = buildPanel(guildId);
         await interaction.update({ embeds: [embed], components });
-        return interaction.followUp({ content: L(`❌ Ya existe un trigger para \`${keyword}\`.`, `❌ A trigger for \`${keyword}\` already exists.`), ephemeral: true });
+        return interaction.followUp({ content: L(`❌ Ya existe un trigger para \`${keyword}\`.`, `❌ A trigger for \`${keyword}\` already exists.`), flags: 64 });
       }
 
       triggers.push({ keyword, matchType, replyType, title: title || null, content, createdBy: interaction.user.id, createdAt: Date.now() });
@@ -165,7 +165,7 @@ module.exports = {
 
       const { embed, components } = buildPanel(guildId);
       await interaction.update({ embeds: [embed], components });
-      return interaction.followUp({ content: L(`✅ Trigger \`${keyword}\` creado.`, `✅ Trigger \`${keyword}\` created.`), ephemeral: true });
+      return interaction.followUp({ content: L(`✅ Trigger \`${keyword}\` creado.`, `✅ Trigger \`${keyword}\` created.`), flags: 64 });
     }
 
     // ── DELETE — open modal ───────────────────────────────────────────────────
@@ -194,13 +194,13 @@ module.exports = {
       if (isNaN(num) || num < 1 || num > triggers.length) {
         const { embed, components } = buildPanel(guildId);
         await interaction.update({ embeds: [embed], components });
-        return interaction.followUp({ content: L('❌ Número inválido.', '❌ Invalid number.'), ephemeral: true });
+        return interaction.followUp({ content: L('❌ Número inválido.', '❌ Invalid number.'), flags: 64 });
       }
       const removed = triggers.splice(num - 1, 1)[0];
       saveTriggers(guildId, triggers);
       const { embed, components } = buildPanel(guildId);
       await interaction.update({ embeds: [embed], components });
-      return interaction.followUp({ content: L(`✅ Trigger \`${removed.keyword}\` eliminado.`, `✅ Trigger \`${removed.keyword}\` deleted.`), ephemeral: true });
+      return interaction.followUp({ content: L(`✅ Trigger \`${removed.keyword}\` eliminado.`, `✅ Trigger \`${removed.keyword}\` deleted.`), flags: 64 });
     }
 
     // ── TEST — open modal ─────────────────────────────────────────────────────
@@ -226,10 +226,10 @@ module.exports = {
       const input = interaction.fields.getTextInputValue('trigger_test_input').trim();
       const match = findTrigger(guildId, input);
       if (!match) {
-        return interaction.reply({ content: L(`🧪 Sin coincidencia para: \`${input}\``, `🧪 No match for: \`${input}\``), ephemeral: true });
+        return interaction.reply({ content: L(`🧪 Sin coincidencia para: \`${input}\``, `🧪 No match for: \`${input}\``), flags: 64 });
       }
       const response = buildTriggerResponse(match);
-      return interaction.reply({ content: L(`🧪 Coincide con trigger \`${match.keyword}\`:`, `🧪 Matches trigger \`${match.keyword}\`:`), ...response, ephemeral: true });
+      return interaction.reply({ content: L(`🧪 Coincide con trigger \`${match.keyword}\`:`, `🧪 Matches trigger \`${match.keyword}\`:`), ...response, flags: 64 });
     }
 
     return false;

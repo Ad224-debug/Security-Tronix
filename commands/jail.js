@@ -53,7 +53,7 @@ module.exports = {
     // ── SETUP ─────────────────────────────────────────────────────────────────
     if (sub === 'setup') {
       if (interaction.user.id !== interaction.guild.ownerId) {
-        return interaction.reply({ content: L('❌ Solo el dueño puede configurar el jail.', '❌ Only the owner can configure jail.'), ephemeral: true });
+        return interaction.reply({ content: L('❌ Solo el dueño puede configurar el jail.', '❌ Only the owner can configure jail.'), flags: 64 });
       }
       const role = interaction.options.getRole('jail_role');
       const channel = interaction.options.getChannel('jail_channel');
@@ -68,32 +68,32 @@ module.exports = {
           )
           .setFooter({ text: L('Asegúrate de que el rol de jail solo tenga acceso al canal de jail.', 'Make sure the jail role only has access to the jail channel.') })
           .setTimestamp()],
-        ephemeral: true
+        flags: 64
       });
     }
 
     // ── JAIL USER ─────────────────────────────────────────────────────────────
     if (sub === 'user') {
       const cfg = getJailConfig(interaction.guild.id);
-      if (!cfg) return interaction.reply({ content: L('❌ El sistema de jail no está configurado. Usa `/jail setup`.', '❌ Jail system not configured. Use `/jail setup`.'), ephemeral: true });
+      if (!cfg) return interaction.reply({ content: L('❌ El sistema de jail no está configurado. Usa `/jail setup`.', '❌ Jail system not configured. Use `/jail setup`.'), flags: 64 });
 
       const usuario = interaction.options.getUser('user');
       const razon = interaction.options.getString('reason');
       const miembro = await interaction.guild.members.fetch(usuario.id).catch(() => null);
 
-      if (!miembro) return interaction.reply({ content: L('❌ Usuario no encontrado.', '❌ User not found.'), ephemeral: true });
-      if (usuario.id === interaction.user.id) return interaction.reply({ content: '❌', ephemeral: true });
-      if (usuario.id === interaction.guild.ownerId) return interaction.reply({ content: L('❌ No puedes aislar al dueño.', '❌ Cannot jail the owner.'), ephemeral: true });
+      if (!miembro) return interaction.reply({ content: L('❌ Usuario no encontrado.', '❌ User not found.'), flags: 64 });
+      if (usuario.id === interaction.user.id) return interaction.reply({ content: '❌', flags: 64 });
+      if (usuario.id === interaction.guild.ownerId) return interaction.reply({ content: L('❌ No puedes aislar al dueño.', '❌ Cannot jail the owner.'), flags: 64 });
       if (miembro.roles.highest.position >= interaction.member.roles.highest.position) {
-        return interaction.reply({ content: L('❌ Rol igual o superior.', '❌ Equal or higher role.'), ephemeral: true });
+        return interaction.reply({ content: L('❌ Rol igual o superior.', '❌ Equal or higher role.'), flags: 64 });
       }
 
       const jailRole = interaction.guild.roles.cache.get(cfg.roleId);
-      if (!jailRole) return interaction.reply({ content: L('❌ El rol de jail no existe. Reconfigura con `/jail setup`.', '❌ Jail role not found. Reconfigure with `/jail setup`.'), ephemeral: true });
+      if (!jailRole) return interaction.reply({ content: L('❌ El rol de jail no existe. Reconfigura con `/jail setup`.', '❌ Jail role not found. Reconfigure with `/jail setup`.'), flags: 64 });
 
       // Verificar que no esté ya en jail
       const jailed = getJailedUsers(interaction.guild.id);
-      if (jailed[usuario.id]) return interaction.reply({ content: L('❌ Este usuario ya está aislado.', '❌ This user is already jailed.'), ephemeral: true });
+      if (jailed[usuario.id]) return interaction.reply({ content: L('❌ Este usuario ya está aislado.', '❌ This user is already jailed.'), flags: 64 });
 
       await interaction.deferReply();
 
@@ -154,14 +154,14 @@ module.exports = {
     // ── FREE USER ─────────────────────────────────────────────────────────────
     if (sub === 'free') {
       const cfg = getJailConfig(interaction.guild.id);
-      if (!cfg) return interaction.reply({ content: L('❌ El sistema de jail no está configurado.', '❌ Jail system not configured.'), ephemeral: true });
+      if (!cfg) return interaction.reply({ content: L('❌ El sistema de jail no está configurado.', '❌ Jail system not configured.'), flags: 64 });
 
       const usuario = interaction.options.getUser('user');
       const razon = interaction.options.getString('reason') || L('No especificada', 'Not specified');
       const miembro = await interaction.guild.members.fetch(usuario.id).catch(() => null);
 
       const jailed = getJailedUsers(interaction.guild.id);
-      if (!jailed[usuario.id]) return interaction.reply({ content: L('❌ Este usuario no está aislado.', '❌ This user is not jailed.'), ephemeral: true });
+      if (!jailed[usuario.id]) return interaction.reply({ content: L('❌ Este usuario no está aislado.', '❌ This user is not jailed.'), flags: 64 });
 
       await interaction.deferReply();
 
@@ -213,7 +213,7 @@ module.exports = {
     if (sub === 'list') {
       const jailed = getJailedUsers(interaction.guild.id);
       const entries = Object.entries(jailed);
-      if (entries.length === 0) return interaction.reply({ content: L('✅ No hay usuarios aislados actualmente.', '✅ No users are currently jailed.'), ephemeral: true });
+      if (entries.length === 0) return interaction.reply({ content: L('✅ No hay usuarios aislados actualmente.', '✅ No users are currently jailed.'), flags: 64 });
 
       const embed = new EmbedBuilder()
         .setTitle(L('🔒 Usuarios Aislados', '🔒 Jailed Users'))
@@ -228,7 +228,7 @@ module.exports = {
       }
       if (entries.length > 10) embed.setFooter({ text: `Mostrando 10 de ${entries.length}` });
 
-      return interaction.reply({ embeds: [embed], ephemeral: true });
+      return interaction.reply({ embeds: [embed], flags: 64 });
     }
   },
 

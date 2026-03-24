@@ -44,7 +44,7 @@ module.exports = {
       const password = interaction.options.getString('password');
 
       if (mode === 'password' && !password) {
-        return interaction.reply({ content: L('❌ Debes ingresar una contraseña para el modo contraseña.', '❌ You must provide a password for password mode.'), ephemeral: true });
+        return interaction.reply({ content: L('❌ Debes ingresar una contraseña para el modo contraseña.', '❌ You must provide a password for password mode.'), flags: 64 });
       }
 
       const cfg = {
@@ -68,20 +68,20 @@ module.exports = {
         .setFooter({ text: L('Usa /verify panel para enviar el mensaje de verificación al canal.', 'Use /verify panel to send the verification message to the channel.') })
         .setTimestamp();
 
-      return interaction.reply({ embeds: [embed], ephemeral: true });
+      return interaction.reply({ embeds: [embed], flags: 64 });
     }
 
     if (sub === 'disable') {
       const cfg = getConfig(interaction.guild.id);
-      if (!cfg) return interaction.reply({ content: L('❌ El sistema no está configurado.', '❌ System is not configured.'), ephemeral: true });
+      if (!cfg) return interaction.reply({ content: L('❌ El sistema no está configurado.', '❌ System is not configured.'), flags: 64 });
       cfg.enabled = false;
       saveConfig(interaction.guild.id, cfg);
-      return interaction.reply({ content: L('✅ Sistema de verificación desactivado.', '✅ Verification system disabled.'), ephemeral: true });
+      return interaction.reply({ content: L('✅ Sistema de verificación desactivado.', '✅ Verification system disabled.'), flags: 64 });
     }
 
     if (sub === 'status') {
       const cfg = getConfig(interaction.guild.id);
-      if (!cfg) return interaction.reply({ content: L('❌ El sistema no está configurado. Usa `/verify setup`.', '❌ System not configured. Use `/verify setup`.'), ephemeral: true });
+      if (!cfg) return interaction.reply({ content: L('❌ El sistema no está configurado. Usa `/verify setup`.', '❌ System not configured. Use `/verify setup`.'), flags: 64 });
       const modeLabels = { button: '✅ Botón', captcha: '🔢 Captcha matemático', password: '🔑 Contraseña' };
       const embed = new EmbedBuilder()
         .setTitle(L('🔍 Estado del Sistema de Verificación', '🔍 Verification System Status'))
@@ -94,16 +94,16 @@ module.exports = {
           { name: L('Contraseña', 'Password'), value: cfg.mode === 'password' ? `||\`${cfg.password}\`||` : 'N/A', inline: true },
         )
         .setTimestamp();
-      return interaction.reply({ embeds: [embed], ephemeral: true });
+      return interaction.reply({ embeds: [embed], flags: 64 });
     }
 
     if (sub === 'panel') {
       const cfg = getConfig(interaction.guild.id);
-      if (!cfg || !cfg.enabled) return interaction.reply({ content: L('❌ El sistema no está activo. Usa `/verify setup` primero.', '❌ System not active. Use `/verify setup` first.'), ephemeral: true });
-      if (!cfg.channelId) return interaction.reply({ content: L('❌ No hay canal configurado. Agrega un canal en `/verify setup`.', '❌ No channel configured. Add a channel in `/verify setup`.'), ephemeral: true });
+      if (!cfg || !cfg.enabled) return interaction.reply({ content: L('❌ El sistema no está activo. Usa `/verify setup` primero.', '❌ System not active. Use `/verify setup` first.'), flags: 64 });
+      if (!cfg.channelId) return interaction.reply({ content: L('❌ No hay canal configurado. Agrega un canal en `/verify setup`.', '❌ No channel configured. Add a channel in `/verify setup`.'), flags: 64 });
 
       const ch = interaction.guild.channels.cache.get(cfg.channelId);
-      if (!ch) return interaction.reply({ content: L('❌ El canal configurado no existe.', '❌ Configured channel does not exist.'), ephemeral: true });
+      if (!ch) return interaction.reply({ content: L('❌ El canal configurado no existe.', '❌ Configured channel does not exist.'), flags: 64 });
 
       const modeLabels = { button: '✅ Botón', captcha: '🔢 Captcha matemático', password: '🔑 Contraseña' };
       const embed = new EmbedBuilder()
@@ -117,7 +117,7 @@ module.exports = {
         .setTimestamp();
 
       await ch.send({ embeds: [embed] });
-      return interaction.reply({ content: L(`✅ Panel enviado a ${ch}.`, `✅ Panel sent to ${ch}.`), ephemeral: true });
+      return interaction.reply({ content: L(`✅ Panel enviado a ${ch}.`, `✅ Panel sent to ${ch}.`), flags: 64 });
     }
   }
 };

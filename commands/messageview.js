@@ -61,7 +61,7 @@ module.exports = {
     const tipo = interaction.options.getString('type') || 'all';
     const key = `${interaction.guild.id}-${usuario.id}`;
 
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: 64 });
 
     const history = messageHistory.get(key) || [];
     const deleted = deletedMessages.get(key) || [];

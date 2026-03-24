@@ -188,7 +188,7 @@ module.exports = {
         .setColor(cat.color)
         .setFooter({ text: L('Usa /help para ver todas las categorías', 'Use /help to see all categories') })
         .setTimestamp();
-      return interaction.reply({ embeds: [embed], ephemeral: true });
+      return interaction.reply({ embeds: [embed], flags: 64 });
     }
 
     // Vista general de categorías
@@ -215,6 +215,6 @@ module.exports = {
       .setFooter({ text: L('Usa /help category:<categoría> para ver comandos específicos', 'Use /help category:<category> to see specific commands') })
       .setTimestamp();
 
-    await interaction.reply({ embeds: [mainEmbed], ephemeral: true });
+    await interaction.reply({ embeds: [mainEmbed], flags: 64 });
   },
 };

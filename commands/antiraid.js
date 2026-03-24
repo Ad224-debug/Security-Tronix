@@ -11,7 +11,7 @@ module.exports = {
 
   async execute(interaction) {
     try {
-      if (!interaction.guild) return interaction.reply({ content: '❌ Solo en servidores.', ephemeral: true });
+      if (!interaction.guild) return interaction.reply({ content: '❌ Solo en servidores.', flags: 64 });
       await interaction.deferReply({ ephemeral: false });
       const sub  = interaction.options.getSubcommand();
       const lang = interaction.client.getLanguage(interaction.guild.id);
@@ -53,7 +53,7 @@ module.exports = {
       console.error('[antiraid] Error:', err);
       const msg = { content: `❌ Error interno: \`${err.message}\`` };
       if (interaction.replied || interaction.deferred) return interaction.editReply(msg);
-      return interaction.reply({ ...msg, ephemeral: true });
+      return interaction.reply({ ...msg, flags: 64 });
     }
   }
 };

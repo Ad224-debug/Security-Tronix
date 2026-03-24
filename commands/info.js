@@ -101,9 +101,9 @@ module.exports = {
 
     // ── INVITES ──────────────────────────────────────────────────────────────
     if (sub === 'invites') {
-      if (!interaction.member.permissions.has(PermissionFlagsBits.ManageGuild)) return interaction.reply({ content: L('❌ Sin permisos.', '❌ No permission.'), ephemeral: true });
+      if (!interaction.member.permissions.has(PermissionFlagsBits.ManageGuild)) return interaction.reply({ content: L('❌ Sin permisos.', '❌ No permission.'), flags: 64 });
       const invites = await interaction.guild.invites.fetch();
-      if (invites.size === 0) return interaction.reply({ content: L('❌ No hay invitaciones activas.', '❌ No active invites.'), ephemeral: true });
+      if (invites.size === 0) return interaction.reply({ content: L('❌ No hay invitaciones activas.', '❌ No active invites.'), flags: 64 });
       const list = invites.map(i => `\`${i.code}\` | ${i.inviter?.tag || '?'} | ${i.uses || 0}/${i.maxUses || '∞'}`).join('\n');
       return interaction.reply({ embeds: [new EmbedBuilder().setTitle(L('📨 Invitaciones','📨 Invites')).setDescription(list).setColor(0x5865F2).setTimestamp()] });
     }

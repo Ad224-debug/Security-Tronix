@@ -16,9 +16,9 @@ module.exports = {
 
     try {
       await channel.send(message);
-      await interaction.reply({ content: L(`✅ Mensaje enviado en ${channel}.`, `✅ Message sent in ${channel}.`), ephemeral: true });
+      await interaction.reply({ content: L(`✅ Mensaje enviado en ${channel}.`, `✅ Message sent in ${channel}.`), flags: 64 });
     } catch (error) {
-      await interaction.reply({ content: '❌ Error al enviar el mensaje.', ephemeral: true });
+      await interaction.reply({ content: '❌ Error al enviar el mensaje.', flags: 64 });
     }
   },
 };

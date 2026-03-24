@@ -23,7 +23,7 @@ module.exports = {
       sub = interaction.options.getSubcommand();
     } catch (e) {
       console.error('[security] getSubcommand error:', e);
-      return interaction.reply({ content: '❌ Error interno.', ephemeral: true });
+      return interaction.reply({ content: '❌ Error interno.', flags: 64 });
     }
 
     // Defer inmediato para todos los subcomandos — evita timeout de 3s

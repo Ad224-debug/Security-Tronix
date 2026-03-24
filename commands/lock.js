@@ -33,7 +33,7 @@ module.exports = {
       await interaction.reply({ embeds: [embed] });
     } catch (error) {
       console.error('Error en lock:', error);
-      await interaction.reply({ content: '❌ Error al ejecutar el comando.', ephemeral: true });
+      await interaction.reply({ content: '❌ Error al ejecutar el comando.', flags: 64 });
     }
   },
 };

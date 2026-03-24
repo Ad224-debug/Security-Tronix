@@ -74,7 +74,7 @@ module.exports = {
 
   async execute(interaction) {
     const { embed, components } = buildPanel(interaction.guild.id);
-    await interaction.reply({ embeds: [embed], components, ephemeral: true });
+    await interaction.reply({ embeds: [embed], components, flags: 64 });
   },
 
   async handleInteraction(interaction) {
@@ -92,7 +92,7 @@ module.exports = {
         || interaction.guild.channels.cache.find(c => c.name === raw);
 
       if (!channel) {
-        return interaction.reply({ content: `❌ Canal no encontrado: \`${raw}\`\nUsa el ID, la mención o el nombre exacto.`, ephemeral: true });
+        return interaction.reply({ content: `❌ Canal no encontrado: \`${raw}\`\nUsa el ID, la mención o el nombre exacto.`, flags: 64 });
       }
 
       const cfg = loadLogs(guildId);

@@ -18,7 +18,7 @@ module.exports = {
       const member = await interaction.guild.members.fetch(usuario.id);
 
       if (member.roles.highest.position >= interaction.member.roles.highest.position && interaction.user.id !== interaction.guild.ownerId) {
-        return interaction.reply({ content: L('❌ No puedes cambiar el apodo de alguien con un rol igual o superior al tuyo.', '❌ Cannot change nickname of someone with equal or higher role.'), ephemeral: true });
+        return interaction.reply({ content: L('❌ No puedes cambiar el apodo de alguien con un rol igual o superior al tuyo.', '❌ Cannot change nickname of someone with equal or higher role.'), flags: 64 });
       }
 
       const oldNick = member.nickname || usuario.username;
@@ -36,7 +36,7 @@ module.exports = {
 
       await interaction.reply({ embeds: [embed] });
     } catch (error) {
-      await interaction.reply({ content: '❌ Error al cambiar el apodo.', ephemeral: true });
+      await interaction.reply({ content: '❌ Error al cambiar el apodo.', flags: 64 });
     }
   },
 };

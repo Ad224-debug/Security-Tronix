@@ -15,7 +15,7 @@ module.exports = {
 
     // Users can only check their own warnings; mods can check anyone
     if (usuario.id !== interaction.user.id && !interaction.member.permissions.has(PermissionFlagsBits.ModerateMembers)) {
-      return interaction.reply({ content: L('❌ Solo puedes ver tus propias advertencias.', '❌ You can only view your own warnings.'), ephemeral: true });
+      return interaction.reply({ content: L('❌ Solo puedes ver tus propias advertencias.', '❌ You can only view your own warnings.'), flags: 64 });
     }
 
     const warningsPath = path.join(__dirname, '../warnings.json');

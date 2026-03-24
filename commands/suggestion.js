@@ -105,7 +105,7 @@ module.exports = {
     if (adminSubs.includes(subcommand) && !interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
       return await interaction.reply({
         content: lang === 'es' ? '❌ Solo administradores pueden usar este subcomando.' : '❌ Only administrators can use this subcommand.',
-        ephemeral: true
+        flags: 64
       });
     }
 
@@ -120,7 +120,7 @@ module.exports = {
             content: lang === 'es'
               ? '❌ No se ha configurado un canal de sugerencias. Un administrador debe usar `/suggestion setup` primero.'
               : '❌ No suggestion channel has been configured. An administrator must use `/suggestion setup` first.',
-            ephemeral: true
+            flags: 64
           });
         }
 
@@ -128,7 +128,7 @@ module.exports = {
         if (!suggestionChannel) {
           return await interaction.reply({
             content: lang === 'es' ? '❌ El canal de sugerencias no existe.' : '❌ The suggestion channel does not exist.',
-            ephemeral: true
+            flags: 64
           });
         }
 
@@ -164,7 +164,7 @@ module.exports = {
 
         return await interaction.reply({
           content: lang === 'es' ? `✅ Tu sugerencia #${newId} ha sido enviada.` : `✅ Your suggestion #${newId} has been submitted.`,
-          ephemeral: true
+          flags: 64
         });
       }
 
@@ -188,7 +188,7 @@ module.exports = {
             color: 0x57F287,
             timestamp: new Date()
           }],
-          ephemeral: true
+          flags: 64
         });
         break;
 
@@ -202,7 +202,7 @@ module.exports = {
         if (!guildSuggestionsAD || guildSuggestionsAD.length === 0) {
           return await interaction.reply({
             content: lang === 'es' ? '❌ No hay sugerencias en este servidor.' : '❌ There are no suggestions in this server.',
-            ephemeral: true
+            flags: 64
           });
         }
 
@@ -211,7 +211,7 @@ module.exports = {
         if (suggestionIndex === -1) {
           return await interaction.reply({
             content: lang === 'es' ? `❌ No se encontró la sugerencia #${id}.` : `❌ Suggestion #${id} not found.`,
-            ephemeral: true
+            flags: 64
           });
         }
 
@@ -222,7 +222,7 @@ module.exports = {
             content: lang === 'es'
               ? `❌ Esta sugerencia ya fue ${suggestionData.status === 'approved' ? 'aprobada' : 'rechazada'}.`
               : `❌ This suggestion was already ${suggestionData.status === 'approved' ? 'approved' : 'denied'}.`,
-            ephemeral: true
+            flags: 64
           });
         }
 
@@ -282,14 +282,14 @@ module.exports = {
               color: isApproved ? 0x57F287 : 0xED4245,
               timestamp: new Date()
             }],
-            ephemeral: true
+            flags: 64
           });
 
         } catch (error) {
           console.error('Error updating suggestion:', error);
           await interaction.reply({
             content: lang === 'es' ? '❌ Hubo un error al actualizar la sugerencia.' : '❌ There was an error updating the suggestion.',
-            ephemeral: true
+            flags: 64
           });
         }
         break;
@@ -299,7 +299,7 @@ module.exports = {
         if (!guildSuggestionsList || guildSuggestionsList.length === 0) {
           return await interaction.reply({
             content: lang === 'es' ? '📭 No hay sugerencias en este servidor.' : '📭 There are no suggestions in this server.',
-            ephemeral: true
+            flags: 64
           });
         }
 
@@ -308,7 +308,7 @@ module.exports = {
         if (pending.length === 0) {
           return await interaction.reply({
             content: lang === 'es' ? '📭 No hay sugerencias pendientes.' : '📭 There are no pending suggestions.',
-            ephemeral: true
+            flags: 64
           });
         }
 
@@ -321,7 +321,7 @@ module.exports = {
           .setFooter({ text: lang === 'es' ? `Total: ${pending.length} sugerencias` : `Total: ${pending.length} suggestions` })
           .setTimestamp();
 
-        await interaction.reply({ embeds: [listEmbed], ephemeral: true });
+        await interaction.reply({ embeds: [listEmbed], flags: 64 });
         break;
       }
 
@@ -332,7 +332,7 @@ module.exports = {
         if (!guildSuggestionsView || guildSuggestionsView.length === 0) {
           return await interaction.reply({
             content: lang === 'es' ? '❌ No hay sugerencias en este servidor.' : '❌ There are no suggestions in this server.',
-            ephemeral: true
+            flags: 64
           });
         }
 
@@ -341,7 +341,7 @@ module.exports = {
         if (!viewSuggestion) {
           return await interaction.reply({
             content: lang === 'es' ? `❌ No se encontró la sugerencia #${viewId}.` : `❌ Suggestion #${viewId} not found.`,
-            ephemeral: true
+            flags: 64
           });
         }
 
@@ -370,7 +370,7 @@ module.exports = {
         }
 
         viewEmbed.setTimestamp();
-        await interaction.reply({ embeds: [viewEmbed], ephemeral: true });
+        await interaction.reply({ embeds: [viewEmbed], flags: 64 });
         break;
       }
     }

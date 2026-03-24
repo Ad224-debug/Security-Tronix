@@ -34,6 +34,6 @@ module.exports = {
     if (footer) embed.setFooter({ text: footer });
 
     await interaction.channel.send({ embeds: [embed] });
-    await interaction.reply({ content: L('✅ Embed creado.', '✅ Embed created.'), ephemeral: true });
+    await interaction.reply({ content: L('✅ Embed creado.', '✅ Embed created.'), flags: 64 });
   },
 };

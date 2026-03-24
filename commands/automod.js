@@ -78,7 +78,7 @@ module.exports = {
     const data = loadAutomod(interaction.guild.id);
     const cfg = data[interaction.guild.id];
     const { embed, components } = buildPanel(cfg);
-    await interaction.reply({ embeds: [embed], components, ephemeral: true });
+    await interaction.reply({ embeds: [embed], components, flags: 64 });
   },
 
   // Handler de botones e interacciones - se llama desde index.js

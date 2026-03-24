@@ -29,14 +29,14 @@ module.exports = {
     if (usuario.id === interaction.user.id) {
       return await interaction.reply({
         content: lang === 'es' ? '❌ No puedes reportarte a ti mismo.' : '❌ You cannot report yourself.',
-        ephemeral: true
+        flags: 64
       });
     }
 
     if (usuario.bot) {
       return await interaction.reply({
         content: lang === 'es' ? '❌ No puedes reportar bots.' : '❌ You cannot report bots.',
-        ephemeral: true
+        flags: 64
       });
     }
 
@@ -54,7 +54,7 @@ module.exports = {
         content: lang === 'es' 
           ? '❌ No se ha configurado un canal de reportes. Un administrador debe usar `/config reportchannel` primero.'
           : '❌ No report channel has been configured. An administrator must use `/config reportchannel` first.',
-        ephemeral: true
+        flags: 64
       });
     }
 
@@ -63,7 +63,7 @@ module.exports = {
     if (!reportChannel) {
       return await interaction.reply({
         content: lang === 'es' ? '❌ El canal de reportes configurado no existe.' : '❌ The configured report channel does not exist.',
-        ephemeral: true
+        flags: 64
       });
     }
 
@@ -133,7 +133,7 @@ module.exports = {
       content: lang === 'es' 
         ? '✅ Tu reporte ha sido enviado al equipo de moderación. Gracias por ayudar a mantener la comunidad segura.'
         : '✅ Your report has been sent to the moderation team. Thank you for helping keep the community safe.',
-      ephemeral: true
+      flags: 64
     });
   },
 };

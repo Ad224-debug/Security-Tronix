@@ -18,7 +18,7 @@ module.exports = {
         content: lang === 'es'
           ? '❌ Solo el dueño del servidor puede usar este comando.'
           : '❌ Only the server owner can use this command.',
-        ephemeral: true
+        flags: 64
       });
     }
 
@@ -29,11 +29,11 @@ module.exports = {
         content: lang === 'es'
           ? '❌ El archivo debe ser una imagen (PNG, JPG, GIF, etc.)'
           : '❌ The file must be an image (PNG, JPG, GIF, etc.)',
-        ephemeral: true
+        flags: 64
       });
     }
 
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: 64 });
 
     try {
       // Cambia el avatar solo en este servidor usando guild avatar

@@ -21,7 +21,7 @@ module.exports = {
 
       await interaction.reply({ content: msg });
     } catch (error) {
-      await interaction.reply({ content: '❌ Error al configurar slowmode.', ephemeral: true });
+      await interaction.reply({ content: '❌ Error al configurar slowmode.', flags: 64 });
     }
   },
 };

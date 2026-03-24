@@ -80,10 +80,10 @@ module.exports = {
       const dias = interaction.options.getInteger('days') || 0;
       const miembro = await interaction.guild.members.fetch(usuario.id).catch(() => null);
 
-      if (usuario.id === interaction.user.id) return interaction.reply({ content: L('❌ No puedes banearte a ti mismo.', '❌ You cannot ban yourself.'), ephemeral: true });
-      if (usuario.id === interaction.guild.ownerId) return interaction.reply({ content: L('❌ No puedes banear al dueño.', '❌ Cannot ban the owner.'), ephemeral: true });
-      if (miembro?.roles.highest.position >= interaction.member.roles.highest.position) return interaction.reply({ content: L('❌ Rol igual o superior.', '❌ Equal or higher role.'), ephemeral: true });
-      if (miembro && !miembro.bannable) return interaction.reply({ content: L('❌ No puedo banear a este usuario.', '❌ Cannot ban this user.'), ephemeral: true });
+      if (usuario.id === interaction.user.id) return interaction.reply({ content: L('❌ No puedes banearte a ti mismo.', '❌ You cannot ban yourself.'), flags: 64 });
+      if (usuario.id === interaction.guild.ownerId) return interaction.reply({ content: L('❌ No puedes banear al dueño.', '❌ Cannot ban the owner.'), flags: 64 });
+      if (miembro?.roles.highest.position >= interaction.member.roles.highest.position) return interaction.reply({ content: L('❌ Rol igual o superior.', '❌ Equal or higher role.'), flags: 64 });
+      if (miembro && !miembro.bannable) return interaction.reply({ content: L('❌ No puedo banear a este usuario.', '❌ Cannot ban this user.'), flags: 64 });
 
       if (miembro) {
         try { await usuario.send({ embeds: [new EmbedBuilder().setTitle(L('🔨 Has sido baneado', '🔨 You have been banned')).setDescription(L(`Baneado de **${interaction.guild.name}**`, `Banned from **${interaction.guild.name}**`)).addFields({ name: L('Razón','Reason'), value: razon }, { name: L('Moderador','Moderator'), value: interaction.user.tag }).setColor(0xED4245).setTimestamp()] }); } catch {}
@@ -100,11 +100,11 @@ module.exports = {
       const usuario = interaction.options.getUser('user');
       const razon = interaction.options.getString('reason') || L('No especificada', 'Not specified');
       const miembro = await interaction.guild.members.fetch(usuario.id).catch(() => null);
-      if (!miembro) return interaction.reply({ content: L('❌ Usuario no encontrado.', '❌ User not found.'), ephemeral: true });
-      if (usuario.id === interaction.user.id) return interaction.reply({ content: L('❌ No puedes expulsarte.', '❌ Cannot kick yourself.'), ephemeral: true });
-      if (usuario.id === interaction.guild.ownerId) return interaction.reply({ content: L('❌ No puedes expulsar al dueño.', '❌ Cannot kick the owner.'), ephemeral: true });
-      if (miembro.roles.highest.position >= interaction.member.roles.highest.position) return interaction.reply({ content: L('❌ Rol igual o superior.', '❌ Equal or higher role.'), ephemeral: true });
-      if (!miembro.kickable) return interaction.reply({ content: L('❌ No puedo expulsar a este usuario.', '❌ Cannot kick this user.'), ephemeral: true });
+      if (!miembro) return interaction.reply({ content: L('❌ Usuario no encontrado.', '❌ User not found.'), flags: 64 });
+      if (usuario.id === interaction.user.id) return interaction.reply({ content: L('❌ No puedes expulsarte.', '❌ Cannot kick yourself.'), flags: 64 });
+      if (usuario.id === interaction.guild.ownerId) return interaction.reply({ content: L('❌ No puedes expulsar al dueño.', '❌ Cannot kick the owner.'), flags: 64 });
+      if (miembro.roles.highest.position >= interaction.member.roles.highest.position) return interaction.reply({ content: L('❌ Rol igual o superior.', '❌ Equal or higher role.'), flags: 64 });
+      if (!miembro.kickable) return interaction.reply({ content: L('❌ No puedo expulsar a este usuario.', '❌ Cannot kick this user.'), flags: 64 });
       try { await usuario.send({ embeds: [new EmbedBuilder().setTitle(L('👢 Has sido expulsado','👢 You have been kicked')).setDescription(L(`Expulsado de **${interaction.guild.name}**`,`Kicked from **${interaction.guild.name}**`)).addFields({ name: L('Razón','Reason'), value: razon }, { name: L('Moderador','Moderator'), value: interaction.user.tag }).setColor(0xFEE75C).setTimestamp()] }); } catch {}
       await miembro.kick(razon);
       const caseId = createCase(interaction.guild.id, 'kick', usuario.id, interaction.user.id, razon);
@@ -119,8 +119,8 @@ module.exports = {
       const razon = interaction.options.getString('reason') || L('No especificada', 'Not specified');
       const dias = interaction.options.getInteger('days') || 7;
       const miembro = await interaction.guild.members.fetch(usuario.id).catch(() => null);
-      if (usuario.id === interaction.user.id) return interaction.reply({ content: '❌', ephemeral: true });
-      if (miembro?.roles.highest.position >= interaction.member.roles.highest.position) return interaction.reply({ content: L('❌ Rol igual o superior.', '❌ Equal or higher role.'), ephemeral: true });
+      if (usuario.id === interaction.user.id) return interaction.reply({ content: '❌', flags: 64 });
+      if (miembro?.roles.highest.position >= interaction.member.roles.highest.position) return interaction.reply({ content: L('❌ Rol igual o superior.', '❌ Equal or higher role.'), flags: 64 });
       await interaction.deferReply();
       await interaction.guild.members.ban(usuario, { deleteMessageSeconds: dias * 86400, reason: `[SOFTBAN] ${razon}` });
       await interaction.guild.members.unban(usuario, `[SOFTBAN] ${razon}`);
@@ -134,8 +134,8 @@ module.exports = {
       const razon = interaction.options.getString('reason') || L('No especificada', 'Not specified');
       const deleteDays = interaction.options.getInteger('delete_days') || 0;
       const miembro = await interaction.guild.members.fetch(usuario.id).catch(() => null);
-      if (usuario.id === interaction.user.id || usuario.id === interaction.guild.ownerId) return interaction.reply({ content: '❌', ephemeral: true });
-      if (miembro?.roles.highest.position >= interaction.member.roles.highest.position) return interaction.reply({ content: L('❌ Rol igual o superior.', '❌ Equal or higher role.'), ephemeral: true });
+      if (usuario.id === interaction.user.id || usuario.id === interaction.guild.ownerId) return interaction.reply({ content: '❌', flags: 64 });
+      if (miembro?.roles.highest.position >= interaction.member.roles.highest.position) return interaction.reply({ content: L('❌ Rol igual o superior.', '❌ Equal or higher role.'), flags: 64 });
       await interaction.deferReply();
       const expiresAt = Date.now() + days * 86400000;
       if (miembro) { try { await usuario.send({ embeds: [new EmbedBuilder().setTitle(L('⏰ Baneado temporalmente','⏰ Temporarily banned')).addFields({ name: L('Razón','Reason'), value: razon }, { name: L('Duración','Duration'), value: `${days} días` }, { name: L('Expira','Expires'), value: `<t:${Math.floor(expiresAt/1000)}:R>` }).setColor(0xFFA500).setTimestamp()] }); } catch {} }
@@ -153,9 +153,9 @@ module.exports = {
       const usuario = interaction.options.getUser('user');
       const razon = interaction.options.getString('reason');
       const miembro = await interaction.guild.members.fetch(usuario.id).catch(() => null);
-      if (usuario.id === interaction.user.id) return interaction.reply({ content: '❌ No puedes advertirte a ti mismo.', ephemeral: true });
-      if (usuario.id === interaction.guild.ownerId) return interaction.reply({ content: '❌ No puedes advertir al dueño.', ephemeral: true });
-      if (miembro?.roles.highest.position >= interaction.member.roles.highest.position) return interaction.reply({ content: '❌ Rol igual o superior.', ephemeral: true });
+      if (usuario.id === interaction.user.id) return interaction.reply({ content: '❌ No puedes advertirte a ti mismo.', flags: 64 });
+      if (usuario.id === interaction.guild.ownerId) return interaction.reply({ content: '❌ No puedes advertir al dueño.', flags: 64 });
+      if (miembro?.roles.highest.position >= interaction.member.roles.highest.position) return interaction.reply({ content: '❌ Rol igual o superior.', flags: 64 });
       const warningsPath = path.join(__dirname, '../warnings.json');
       let warnings = fs.existsSync(warningsPath) ? JSON.parse(fs.readFileSync(warningsPath, 'utf8')) : {};
       const key = `${interaction.guild.id}-${usuario.id}`;
@@ -177,7 +177,7 @@ module.exports = {
           if (guildWarnCfg.autoAction === 'kick') await miembro.kick(autoReason);
           else if (guildWarnCfg.autoAction === 'ban') await interaction.guild.members.ban(usuario, { reason: autoReason });
           else if (guildWarnCfg.autoAction === 'timeout') await miembro.timeout(3600000, autoReason);
-          await interaction.followUp({ content: `⚡ Acción automática: **${guildWarnCfg.autoAction}** por ${warnCount} advertencias.`, ephemeral: true });
+          await interaction.followUp({ content: `⚡ Acción automática: **${guildWarnCfg.autoAction}** por ${warnCount} advertencias.`, flags: 64 });
         } catch {}
       }
       return;
@@ -192,8 +192,8 @@ module.exports = {
       let warnings = fs.existsSync(warningsPath) ? JSON.parse(fs.readFileSync(warningsPath, 'utf8')) : {};
       const key = `${interaction.guild.id}-${usuario.id}`;
       const userWarnings = warnings[key] || [];
-      if (userWarnings.length === 0) return interaction.reply({ content: L('❌ Este usuario no tiene advertencias.', '❌ User has no warnings.'), ephemeral: true });
-      if (warnNumber > userWarnings.length) return interaction.reply({ content: L(`❌ Solo tiene ${userWarnings.length} advertencia(s).`, `❌ Only has ${userWarnings.length} warning(s).`), ephemeral: true });
+      if (userWarnings.length === 0) return interaction.reply({ content: L('❌ Este usuario no tiene advertencias.', '❌ User has no warnings.'), flags: 64 });
+      if (warnNumber > userWarnings.length) return interaction.reply({ content: L(`❌ Solo tiene ${userWarnings.length} advertencia(s).`, `❌ Only has ${userWarnings.length} warning(s).`), flags: 64 });
       userWarnings.splice(warnNumber - 1, 1);
       warnings[key] = userWarnings;
       fs.writeFileSync(warningsPath, JSON.stringify(warnings, null, 2));
@@ -206,9 +206,9 @@ module.exports = {
       const duration = interaction.options.getInteger('duration');
       const reason = interaction.options.getString('reason') || L('No especificada', 'Not specified');
       const member = await interaction.guild.members.fetch(usuario.id).catch(() => null);
-      if (!member) return interaction.reply({ content: '❌ Usuario no encontrado.', ephemeral: true });
-      if (usuario.id === interaction.user.id || usuario.id === interaction.guild.ownerId) return interaction.reply({ content: '❌', ephemeral: true });
-      if (member.roles.highest.position >= interaction.member.roles.highest.position) return interaction.reply({ content: L('❌ Rol igual o superior.', '❌ Equal or higher role.'), ephemeral: true });
+      if (!member) return interaction.reply({ content: '❌ Usuario no encontrado.', flags: 64 });
+      if (usuario.id === interaction.user.id || usuario.id === interaction.guild.ownerId) return interaction.reply({ content: '❌', flags: 64 });
+      if (member.roles.highest.position >= interaction.member.roles.highest.position) return interaction.reply({ content: L('❌ Rol igual o superior.', '❌ Equal or higher role.'), flags: 64 });
       const expiresAt = Date.now() + duration * 60000;
       try { await usuario.send({ embeds: [new EmbedBuilder().setTitle(L('⏱️ Has sido aislado','⏱️ You have been timed out')).addFields({ name: L('Razón','Reason'), value: reason }, { name: L('Duración','Duration'), value: `${duration} min` }, { name: L('Expira','Expires'), value: `<t:${Math.floor(expiresAt/1000)}:R>` }).setColor(0xFFA500).setTimestamp()] }); } catch {}
       await member.timeout(duration * 60000, reason);
@@ -222,8 +222,8 @@ module.exports = {
     if (sub === 'untimeout') {
       const usuario = interaction.options.getUser('user');
       const member = await interaction.guild.members.fetch(usuario.id).catch(() => null);
-      if (!member) return interaction.reply({ content: '❌ Usuario no encontrado.', ephemeral: true });
-      if (!member.isCommunicationDisabled()) return interaction.reply({ content: L('❌ Este usuario no está aislado.', '❌ User is not timed out.'), ephemeral: true });
+      if (!member) return interaction.reply({ content: '❌ Usuario no encontrado.', flags: 64 });
+      if (!member.isCommunicationDisabled()) return interaction.reply({ content: L('❌ Este usuario no está aislado.', '❌ User is not timed out.'), flags: 64 });
       await member.timeout(null);
       return interaction.reply({ embeds: [new EmbedBuilder().setTitle(L('✅ Aislamiento Removido','✅ Timeout Removed')).addFields({ name: L('Usuario','User'), value: usuario.tag, inline: true }, { name: L('Moderador','Moderator'), value: interaction.user.tag, inline: true }).setColor(0x57F287).setTimestamp()] });
     }
@@ -235,7 +235,7 @@ module.exports = {
       try {
         await interaction.guild.members.unban(userId, reason);
         return interaction.reply({ embeds: [new EmbedBuilder().setTitle(L('🔓 Usuario Desbaneado','🔓 User Unbanned')).addFields({ name: 'ID', value: userId, inline: true }, { name: L('Razón','Reason'), value: reason }, { name: L('Moderador','Moderator'), value: interaction.user.tag, inline: true }).setColor(0x57F287).setTimestamp()] });
-      } catch { return interaction.reply({ content: L('❌ No se pudo desbanear. Verifica el ID.', '❌ Could not unban. Check the ID.'), ephemeral: true }); }
+      } catch { return interaction.reply({ content: L('❌ No se pudo desbanear. Verifica el ID.', '❌ Could not unban. Check the ID.'), flags: 64 }); }
     }
 
     // ── HISTORY ──────────────────────────────────────────────────────────────
@@ -268,7 +268,7 @@ module.exports = {
       const casesPath = path.join(__dirname, '../data/mod-cases.json');
       let cases = fs.existsSync(casesPath) ? JSON.parse(fs.readFileSync(casesPath, 'utf8')) : {};
       const modCase = (cases[interaction.guild.id] || []).find(c => c.id === caseId);
-      if (!modCase) return interaction.reply({ content: `❌ Caso #${caseId} no encontrado.`, ephemeral: true });
+      if (!modCase) return interaction.reply({ content: `❌ Caso #${caseId} no encontrado.`, flags: 64 });
       const moderator = await interaction.client.users.fetch(modCase.moderatorId).catch(() => null);
       const target = await interaction.client.users.fetch(modCase.targetId).catch(() => null);
       const typeEmoji = { warn: '⚠️', kick: '👢', ban: '🔨', tempban: '⏰', softban: '🧹', timeout: '⏱️', unban: '🔓', note: '📝' };
@@ -291,9 +291,9 @@ module.exports = {
       const target = interaction.options.getUser('user');
       const key = `${interaction.guild.id}-${target.id}`;
       if (!global.activeLogs) global.activeLogs = new Map();
-      if (global.activeLogs.has(key)) return interaction.reply({ content: `⚠️ Ya se está registrando a **${target.tag}**. Usa \`/mod stoplog\` para detenerlo.`, ephemeral: true });
+      if (global.activeLogs.has(key)) return interaction.reply({ content: `⚠️ Ya se está registrando a **${target.tag}**. Usa \`/mod stoplog\` para detenerlo.`, flags: 64 });
       global.activeLogs.set(key, { messages: [], startedBy: interaction.user.id, startedAt: Date.now(), guildId: interaction.guild.id, userId: target.id, userTag: target.tag });
-      return interaction.reply({ embeds: [new EmbedBuilder().setTitle('📋 Log Iniciado').setColor(0x3498DB).addFields({ name: 'Usuario', value: `${target.tag} (${target.id})`, inline: true }, { name: 'Moderador', value: interaction.user.tag, inline: true }, { name: 'Estado', value: '🟢 Registrando...' }).setTimestamp()], ephemeral: true });
+      return interaction.reply({ embeds: [new EmbedBuilder().setTitle('📋 Log Iniciado').setColor(0x3498DB).addFields({ name: 'Usuario', value: `${target.tag} (${target.id})`, inline: true }, { name: 'Moderador', value: interaction.user.tag, inline: true }, { name: 'Estado', value: '🟢 Registrando...' }).setTimestamp()], flags: 64 });
     }
 
     // ── STOPLOG ──────────────────────────────────────────────────────────────
@@ -301,10 +301,10 @@ module.exports = {
       const target = interaction.options.getUser('user');
       const sendDm = interaction.options.getBoolean('dm') ?? true;
       const key = `${interaction.guild.id}-${target.id}`;
-      if (!global.activeLogs || !global.activeLogs.has(key)) return interaction.reply({ content: `❌ No hay log activo para **${target.tag}**.`, ephemeral: true });
+      if (!global.activeLogs || !global.activeLogs.has(key)) return interaction.reply({ content: `❌ No hay log activo para **${target.tag}**.`, flags: 64 });
       const logData = global.activeLogs.get(key);
       global.activeLogs.delete(key);
-      await interaction.deferReply({ ephemeral: true });
+      await interaction.deferReply({ flags: 64 });
       if (logData.messages.length === 0) return interaction.editReply({ content: `⚠️ No se registraron mensajes de **${target.tag}**.` });
       const duration = Math.round((Date.now() - logData.startedAt) / 60000);
       let content = `=== LOG DE MENSAJES ===\nUsuario: ${logData.userTag} (${logData.userId})\nServidor: ${interaction.guild.name}\nDuración: ${duration} min\nTotal: ${logData.messages.length}\n======================\n\n`;

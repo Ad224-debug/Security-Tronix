@@ -40,7 +40,7 @@ module.exports = {
     // ── HUG ──────────────────────────────────────────────────────────────────
     if (sub === 'hug') {
       const usuario = interaction.options.getUser('user');
-      if (usuario.id === interaction.user.id) return interaction.reply({ content: L('❌ No puedes abrazarte a ti mismo.', '❌ Cannot hug yourself.'), ephemeral: true });
+      if (usuario.id === interaction.user.id) return interaction.reply({ content: L('❌ No puedes abrazarte a ti mismo.', '❌ Cannot hug yourself.'), flags: 64 });
       const gif = rand(hugGifs);
       const desc = L(`🤗💕 **${interaction.user.username}** abrazó a **${usuario.username}**! ¡Qué tierno! ✨`, `🤗💕 **${interaction.user.username}** hugged **${usuario.username}**! So sweet! ✨`);
       const embed = new EmbedBuilder().setDescription(desc).setImage(gif).setColor(0xFF69B4).setTimestamp();
@@ -54,7 +54,7 @@ module.exports = {
     // ── KISS ─────────────────────────────────────────────────────────────────
     if (sub === 'kiss') {
       const usuario = interaction.options.getUser('user');
-      if (usuario.id === interaction.user.id) return interaction.reply({ content: L('❌ No puedes besarte a ti mismo.', '❌ Cannot kiss yourself.'), ephemeral: true });
+      if (usuario.id === interaction.user.id) return interaction.reply({ content: L('❌ No puedes besarte a ti mismo.', '❌ Cannot kiss yourself.'), flags: 64 });
       const gif = rand(kissGifs);
       const desc = L(`😘💕 **${interaction.user.username}** besó a **${usuario.username}**! ¡Qué romántico! ✨`, `😘💕 **${interaction.user.username}** kissed **${usuario.username}**! How romantic! ✨`);
       const embed = new EmbedBuilder().setDescription(desc).setImage(gif).setColor(0xFF1493).setTimestamp();
@@ -68,7 +68,7 @@ module.exports = {
     // ── PAT ──────────────────────────────────────────────────────────────────
     if (sub === 'pat') {
       const usuario = interaction.options.getUser('user');
-      if (usuario.id === interaction.user.id) return interaction.reply({ content: L('❌ No puedes acariciarte a ti mismo.', '❌ Cannot pat yourself.'), ephemeral: true });
+      if (usuario.id === interaction.user.id) return interaction.reply({ content: L('❌ No puedes acariciarte a ti mismo.', '❌ Cannot pat yourself.'), flags: 64 });
       const desc = L(`✨ **${interaction.user.username}** acarició a **${usuario.username}**! 🥰`, `✨ **${interaction.user.username}** patted **${usuario.username}**! 🥰`);
       return interaction.reply({ embeds: [new EmbedBuilder().setDescription(desc).setImage(rand(patGifs)).setColor(0xFFB6C1).setTimestamp()], allowedMentions: { users: [] } });
     }
@@ -76,7 +76,7 @@ module.exports = {
     // ── SLAP ─────────────────────────────────────────────────────────────────
     if (sub === 'slap') {
       const usuario = interaction.options.getUser('user');
-      if (usuario.id === interaction.user.id) return interaction.reply({ content: L('❌ No puedes abofetearte.', '❌ Cannot slap yourself.'), ephemeral: true });
+      if (usuario.id === interaction.user.id) return interaction.reply({ content: L('❌ No puedes abofetearte.', '❌ Cannot slap yourself.'), flags: 64 });
       const desc = L(`💥 **${interaction.user.username}** abofeteó a **${usuario.username}**! 😤`, `💥 **${interaction.user.username}** slapped **${usuario.username}**! 😤`);
       const embed = new EmbedBuilder().setDescription(desc).setImage(rand(slapGifs)).setColor(0xFF4500).setTimestamp();
       const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`fun_slap_revenge_${interaction.user.id}_${usuario.id}`).setLabel(L('😤 Devolver','😤 Slap back')).setStyle(ButtonStyle.Danger));
@@ -134,8 +134,8 @@ module.exports = {
     const senderId = parts[3];
     const targetId = parts[4];
 
-    if (interaction.user.id !== targetId && type !== 'revenge') return interaction.reply({ content: L('❌ Este botón no es para ti.', '❌ This button is not for you.'), ephemeral: true });
-    if (type === 'revenge' && interaction.user.id !== targetId) return interaction.reply({ content: L('❌ Este botón no es para ti.', '❌ This button is not for you.'), ephemeral: true });
+    if (interaction.user.id !== targetId && type !== 'revenge') return interaction.reply({ content: L('❌ Este botón no es para ti.', '❌ This button is not for you.'), flags: 64 });
+    if (type === 'revenge' && interaction.user.id !== targetId) return interaction.reply({ content: L('❌ Este botón no es para ti.', '❌ This button is not for you.'), flags: 64 });
 
     const sender = await interaction.client.users.fetch(senderId).catch(() => null);
     const target = await interaction.client.users.fetch(targetId).catch(() => null);

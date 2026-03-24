@@ -49,7 +49,7 @@ module.exports = {
 
   async execute(interaction) {
     try {
-      await interaction.deferReply({ ephemeral: true });
+      await interaction.deferReply({ flags: 64 });
       const sub = interaction.options.getSubcommand();
       const lang = interaction.client.getLanguage(interaction.guild.id);
       const L = (es, en) => lang === 'es' ? es : en;
@@ -250,7 +250,7 @@ module.exports = {
       console.error('[config] Error inesperado:', err);
       const msg = { content: `❌ Error interno: \`${err.message}\`` };
       if (interaction.replied || interaction.deferred) return interaction.editReply(msg);
-      return interaction.reply({ ...msg, ephemeral: true });
+      return interaction.reply({ ...msg, flags: 64 });
     }
   }
 };

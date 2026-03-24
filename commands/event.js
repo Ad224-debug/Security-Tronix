@@ -131,7 +131,7 @@ module.exports = {
     try {
       if (subcommand === 'create') {
         if (!interaction.member.permissions.has(PermissionFlagsBits.ManageEvents) && !interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
-          return await interaction.reply({ content: '❌ Necesitas el permiso **Gestionar Eventos** para crear eventos.', ephemeral: true });
+          return await interaction.reply({ content: '❌ Necesitas el permiso **Gestionar Eventos** para crear eventos.', flags: 64 });
         }
         await handleCreate(interaction, eventManager, reminderScheduler);
       } else if (subcommand === 'edit') {
@@ -152,9 +152,9 @@ module.exports = {
       const errorMsg = error.message || 'Hubo un error al ejecutar este comando';
       
       if (interaction.replied || interaction.deferred) {
-        await interaction.followUp({ content: `❌ ${errorMsg}`, ephemeral: true });
+        await interaction.followUp({ content: `❌ ${errorMsg}`, flags: 64 });
       } else {
-        await interaction.reply({ content: `❌ ${errorMsg}`, ephemeral: true });
+        await interaction.reply({ content: `❌ ${errorMsg}`, flags: 64 });
       }
     }
   }
@@ -177,7 +177,7 @@ async function handleCreate(interaction, eventManager, reminderScheduler) {
   if (!startTime) {
     return await interaction.reply({
       content: '❌ Formato de fecha inválido. Usa formato como "2024-12-25 18:00" o "tomorrow 3pm"',
-      ephemeral: true
+      flags: 64
     });
   }
 
@@ -187,7 +187,7 @@ async function handleCreate(interaction, eventManager, reminderScheduler) {
     if (!endTime) {
       return await interaction.reply({
         content: '❌ Formato de fecha de fin inválido',
-        ephemeral: true
+        flags: 64
       });
     }
   }
@@ -245,7 +245,7 @@ async function handleCreate(interaction, eventManager, reminderScheduler) {
 
   await interaction.reply({
     content: `✅ Evento creado exitosamente! ID: \`${event.id}\``,
-    ephemeral: true
+    flags: 64
   });
 }
 
@@ -256,7 +256,7 @@ async function handleEdit(interaction, eventManager, reminderScheduler) {
   if (!event) {
     return await interaction.reply({
       content: '❌ Evento no encontrado',
-      ephemeral: true
+      flags: 64
     });
   }
 
@@ -264,7 +264,7 @@ async function handleEdit(interaction, eventManager, reminderScheduler) {
   if (event.creatorId !== interaction.user.id && !interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
     return await interaction.reply({
       content: '❌ Solo el creador del evento o un administrador puede editarlo',
-      ephemeral: true
+      flags: 64
     });
   }
 
@@ -283,7 +283,7 @@ async function handleEdit(interaction, eventManager, reminderScheduler) {
     if (!startTime) {
       return await interaction.reply({
         content: '❌ Formato de fecha inválido',
-        ephemeral: true
+        flags: 64
       });
     }
     updates.startTime = startTime;
@@ -317,7 +317,7 @@ async function handleEdit(interaction, eventManager, reminderScheduler) {
 
   await interaction.reply({
     content: '✅ Evento actualizado exitosamente',
-    ephemeral: true
+    flags: 64
   });
 }
 
@@ -328,7 +328,7 @@ async function handleDelete(interaction, eventManager, reminderScheduler, roleMa
   if (!event) {
     return await interaction.reply({
       content: '❌ Evento no encontrado',
-      ephemeral: true
+      flags: 64
     });
   }
 
@@ -336,7 +336,7 @@ async function handleDelete(interaction, eventManager, reminderScheduler, roleMa
   if (event.creatorId !== interaction.user.id && !interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
     return await interaction.reply({
       content: '❌ Solo el creador del evento o un administrador puede eliminarlo',
-      ephemeral: true
+      flags: 64
     });
   }
 
@@ -371,7 +371,7 @@ async function handleDelete(interaction, eventManager, reminderScheduler, roleMa
 
   await interaction.reply({
     content: '✅ Evento cancelado exitosamente',
-    ephemeral: true
+    flags: 64
   });
 }
 
@@ -394,7 +394,7 @@ async function handleList(interaction, eventManager) {
   if (events.length === 0) {
     return await interaction.reply({
       content: '📅 No hay eventos para mostrar',
-      ephemeral: true
+      flags: 64
     });
   }
 
@@ -419,7 +419,7 @@ async function handleList(interaction, eventManager) {
     embed.setFooter({ text: `Mostrando 10 de ${events.length} eventos` });
   }
 
-  await interaction.reply({ embeds: [embed], ephemeral: true });
+  await interaction.reply({ embeds: [embed], flags: 64 });
 }
 
 async function handleInfo(interaction, eventManager) {
@@ -429,7 +429,7 @@ async function handleInfo(interaction, eventManager) {
   if (!event) {
     return await interaction.reply({
       content: '❌ Evento no encontrado',
-      ephemeral: true
+      flags: 64
     });
   }
 
@@ -447,7 +447,7 @@ async function handleInfo(interaction, eventManager) {
     });
   }
 
-  await interaction.reply({ embeds: [embed], ephemeral: true });
+  await interaction.reply({ embeds: [embed], flags: 64 });
 }
 
 async function handleStats(interaction, statsTracker) {
@@ -466,7 +466,7 @@ async function handleStats(interaction, statsTracker) {
     )
     .setTimestamp();
 
-  await interaction.reply({ embeds: [embed], ephemeral: true });
+  await interaction.reply({ embeds: [embed], flags: 64 });
 }
 
 async function handleLeaderboard(interaction, statsTracker) {
@@ -475,7 +475,7 @@ async function handleLeaderboard(interaction, statsTracker) {
   if (topUsers.length === 0) {
     return await interaction.reply({
       content: '📊 No hay estadísticas disponibles aún',
-      ephemeral: true
+      flags: 64
     });
   }
 
@@ -494,7 +494,7 @@ async function handleLeaderboard(interaction, statsTracker) {
     });
   });
 
-  await interaction.reply({ embeds: [embed], ephemeral: true });
+  await interaction.reply({ embeds: [embed], flags: 64 });
 }
 
 function parseDateTime(str) {

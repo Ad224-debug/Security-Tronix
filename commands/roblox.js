@@ -345,7 +345,7 @@ module.exports = {
         const collector = msg.createMessageComponentCollector({ time: 5 * 60 * 1000 });
         collector.on('collect', async i => {
           if (i.user.id !== interaction.user.id) {
-            return i.reply({ content: '❌ Solo quien usó el comando puede navegar.', ephemeral: true });
+            return i.reply({ content: '❌ Solo quien usó el comando puede navegar.', flags: 64 });
           }
           const view = i.values[0];
           let newEmbed;
