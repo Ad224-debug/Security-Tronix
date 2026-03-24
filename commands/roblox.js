@@ -24,39 +24,55 @@ function fmt(n) {
 // Build the User Profile embed (Avi-style)
 function buildProfileEmbed(d) {
   const { userId, userData, friendsData, followersData, followingData,
-          badgesData, inventoryData, socialData, isPremium, presenceStatus, lastOnline } = d;
+          badgesData, badgeThumbs, inventoryData, socialData, isPremium, presenceStatus, lastOnline } = d;
 
   const createdAt = new Date(userData.created);
   const isBanned = userData.isBanned;
 
-  // Social line
   const friends   = fmt(friendsData.count);
   const followers = fmt(followersData.count);
   const following = fmt(followingData.count);
 
-  // Inventory public?
-  const inventoryPublic = !inventoryData?.errors;
+  // Inventory / RAP
+  const inventoryPublic = !inventoryData?.errors && Array.isArray(inventoryData?.data);
   const rap = inventoryPublic
-    ? fmt(inventoryData.data?.reduce((s, i) => s + (i.recentAveragePrice || 0), 0))
+    ? fmt(inventoryData.data.reduce((s, i) => s + (i.recentAveragePrice || 0), 0))
     : '—';
 
-  // Badges (show icons as emoji-like text, max 5)
-  const badgeIcons = badgesData.data?.slice(0, 5).map(b => `\`${b.name.slice(0, 12)}\``).join(' ') || '—';
+  // Badges — show thumbnail URLs as links (Avi style: badge icons inline)
+  // Discord embeds can't show multiple images, so we show badge names as links to their icons
+  let badgeValue = '—';
+  if (badgesData.data?.length) {
+    const badges = badgesData.data.slice(0, 5);
+    // Map badge id → imageUrl from thumbs
+    const thumbMap = {};
+    for (const t of (badgeThumbs || [])) thumbMap[t.targetId] = t.imageUrl;
+    badgeValue = badges.map(b => {
+      const url = thumbMap[b.id];
+      return url ? `[${b.name}](${url})` : b.name;
+    }).join('\n');
+  }
 
-  // Presence line
+  // Presence
   const presTypes = { 0: '⚫ Offline', 1: '🟢 Online', 2: '🎮 In Game', 3: '🔧 Studio' };
   const presLabel = presTypes[presenceStatus?.type ?? 0] || '⚫ Offline';
   const presGame  = presenceStatus?.lastLocation && presenceStatus?.type === 2
     ? ` • ${presenceStatus.lastLocation}` : '';
 
-  // Social connections (Xbox, YouTube, Twitter, Twitch)
+  // Last Online — use Discord relative timestamp if available
+  let lastOnlineValue = '—';
+  if (lastOnline instanceof Date && !isNaN(lastOnline)) {
+    lastOnlineValue = `<t:${Math.floor(lastOnline.getTime() / 1000)}:R>`;
+  }
+
+  // Social connections
   const socialLines = [];
-  if (socialData?.xboxUsername)   socialLines.push(`<:xbox:1> Xbox: **${socialData.xboxUsername}**`);
+  if (socialData?.xboxUsername)    socialLines.push(`🎮 Xbox: **${socialData.xboxUsername}**`);
   if (socialData?.youtubeUsername) socialLines.push(`▶️ YouTube: **${socialData.youtubeUsername}**`);
   if (socialData?.twitterUsername) socialLines.push(`🐦 Twitter: **${socialData.twitterUsername}**`);
   if (socialData?.twitchUsername)  socialLines.push(`🟣 Twitch: **${socialData.twitchUsername}**`);
 
-  // Language from locale
+  // Language
   const locale = userData.locale || null;
   const localeNames = {
     'en_us': 'English (US)', 'es_es': 'Spanish (Spain)', 'es_mx': 'Spanish (Mexico)',
@@ -81,15 +97,15 @@ function buildProfileEmbed(d) {
     })
     .setDescription(descLines.join('\n'))
     .addFields(
-      { name: 'ID',        value: `${userId}`,                                                    inline: true },
-      { name: 'Verified',  value: 'N/A',                                                          inline: true },
-      { name: 'Inventory', value: inventoryPublic ? 'Public' : 'Private',                         inline: true },
-      { name: 'RAP',       value: rap,                                                             inline: true },
-      { name: 'Value',     value: '—',                                                             inline: true },
-      { name: 'Visits',    value: '0',                                                             inline: true },
-      { name: 'Created',   value: createdAt.toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' }), inline: true },
-      { name: 'Last Online', value: lastOnline ? lastOnline.toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' }) : '—', inline: true },
-      { name: 'Badges',    value: badgeIcons,                                                      inline: true }
+      { name: 'ID',          value: `${userId}`,                                                                                    inline: true },
+      { name: 'Verified',    value: 'N/A',                                                                                          inline: true },
+      { name: 'Inventory',   value: inventoryPublic ? 'Public' : 'Private',                                                         inline: true },
+      { name: 'RAP',         value: rap,                                                                                             inline: true },
+      { name: 'Value',       value: '—',                                                                                             inline: true },
+      { name: 'Visits',      value: '0',                                                                                             inline: true },
+      { name: 'Created',     value: `<t:${Math.floor(createdAt.getTime() / 1000)}:D>`,                                               inline: true },
+      { name: 'Last Online', value: lastOnlineValue,                                                                                 inline: true },
+      { name: 'Badges',      value: badgeValue,                                                                                      inline: true }
     )
     .setFooter({ text: `${presLabel}${presGame}` })
     .setTimestamp();
@@ -242,7 +258,7 @@ module.exports = {
             else isPremium = premiumRes.status === 200;
           } catch { isPremium = false; }
 
-          // Presence
+          // Presence + lastOnline
           let presenceStatus = { type: 0, lastLocation: null };
           let lastOnline = null;
           try {
@@ -255,9 +271,15 @@ module.exports = {
             const p = presData.userPresences?.[0];
             if (p) {
               presenceStatus = { type: p.userPresenceType, lastLocation: p.lastLocation };
+              // lastOnline comes from presence API when authenticated; fallback to userData
               if (p.lastOnline) lastOnline = new Date(p.lastOnline);
             }
           } catch { /* skip */ }
+
+          // Fallback: get lastOnline from user data endpoint (v1 includes lastOnline)
+          if (!lastOnline && userData.lastOnline) {
+            lastOnline = new Date(userData.lastOnline);
+          }
 
           // Currently wearing
           let wearingData = [];
@@ -277,13 +299,24 @@ module.exports = {
             }
           } catch { /* skip */ }
 
+          // Badge thumbnails — fetch icons for up to 5 badges
+          let badgeThumbs = [];
+          try {
+            const badgeIds = badgesData.data?.slice(0, 5).map(b => b.id) || [];
+            if (badgeIds.length) {
+              const btRes = await fetch(`https://thumbnails.roblox.com/v1/badges/icons?badgeIds=${badgeIds.join(',')}&size=150x150&format=Png`);
+              const btData = await btRes.json();
+              badgeThumbs = btData.data || [];
+            }
+          } catch { /* skip */ }
+
           d = {
             userId,
             userData, friendsData, followersData, followingData,
             badgesData, groupsData, gamesData, inventoryData, socialData,
             avatarUrl: avatarHeadData.data?.[0]?.imageUrl || null,
             fullAvatarUrl: avatarFullData.data?.[0]?.imageUrl || null,
-            isPremium, presenceStatus, lastOnline, wearingData
+            isPremium, presenceStatus, lastOnline, wearingData, badgeThumbs
           };
           cache.set(cacheKey, d, 10 * 60 * 1000);
         }
