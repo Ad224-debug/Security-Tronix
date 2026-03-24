@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder } = require('discord.js');
 const cache = require('../cache');
 
 // Helper: resolve username → userId
@@ -21,13 +21,142 @@ function fmt(n) {
   return `${n}`;
 }
 
+// Build the User Profile embed (Avi-style)
+function buildProfileEmbed(d) {
+  const { userId, userData, friendsData, followersData, followingData,
+          badgesData, inventoryData, isPremium, presenceStatus, lastOnline } = d;
+
+  const createdAt = new Date(userData.created);
+  const isBanned = userData.isBanned;
+
+  // Social line
+  const friends   = fmt(friendsData.count);
+  const followers = fmt(followersData.count);
+  const following = fmt(followingData.count);
+
+  // Inventory public?
+  const inventoryPublic = !inventoryData?.errors;
+  const rap = inventoryPublic
+    ? fmt(inventoryData.data?.reduce((s, i) => s + (i.recentAveragePrice || 0), 0))
+    : '—';
+
+  // Badges (show icons as emoji-like text, max 5)
+  const badgeIcons = badgesData.data?.slice(0, 5).map(b => `\`${b.name.slice(0, 12)}\``).join(' ') || '—';
+
+  // Presence line
+  const presTypes = { 0: '⚫ Offline', 1: '🟢 Online', 2: '🎮 In Game', 3: '🔧 Studio' };
+  const presLabel = presTypes[presenceStatus?.type ?? 0] || '⚫ Offline';
+  const presGame  = presenceStatus?.lastLocation && presenceStatus?.type === 2
+    ? ` • ${presenceStatus.lastLocation}` : '';
+
+  const embed = new EmbedBuilder()
+    .setColor(isBanned ? 0xFF0000 : isPremium ? 0xF5A623 : 0x5865F2)
+    .setAuthor({
+      name: `${userData.displayName} (@${userData.name})`,
+      url: `https://www.roblox.com/users/${userId}/profile`
+    })
+    .setDescription(
+      `**${friends} Friends | ${followers} Followers | ${following} Following**` +
+      (isPremium ? '\n💎 Roblox Premium' : '') +
+      (isBanned ? '\n🚫 **Account Banned**' : '')
+    )
+    .addFields(
+      { name: 'ID',        value: `${userId}`,                                                    inline: true },
+      { name: 'Verified',  value: 'N/A',                                                          inline: true },
+      { name: 'Inventory', value: inventoryPublic ? 'Public' : 'Private',                         inline: true },
+      { name: 'RAP',       value: rap,                                                             inline: true },
+      { name: 'Value',     value: '—',                                                             inline: true },
+      { name: 'Visits',    value: '0',                                                             inline: true },
+      { name: 'Created',   value: createdAt.toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' }), inline: true },
+      { name: 'Last Online', value: lastOnline ? lastOnline.toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' }) : '—', inline: true },
+      { name: 'Badges',    value: badgeIcons,                                                      inline: true }
+    )
+    .setFooter({ text: `${presLabel}${presGame}` })
+    .setTimestamp();
+
+  if (d.avatarUrl) embed.setThumbnail(d.avatarUrl);
+  if (userData.description?.trim()) embed.addFields({ name: 'Description', value: userData.description.slice(0, 300) });
+
+  return embed;
+}
+
+// Build Avatar embed
+function buildAvatarEmbed(d) {
+  return new EmbedBuilder()
+    .setColor(0x5865F2)
+    .setAuthor({ name: `${d.userData.displayName} (@${d.userData.name})`, url: `https://www.roblox.com/users/${d.userId}/profile` })
+    .setTitle('Avatar')
+    .setImage(d.fullAvatarUrl || d.avatarUrl)
+    .setFooter({ text: `ID: ${d.userId}` });
+}
+
+// Build Groups embed
+function buildGroupsEmbed(d) {
+  const groups = d.groupsData.data || [];
+  const desc = groups.length
+    ? groups.slice(0, 15).map(g => `**${g.group.name}** — ${g.role.name} • [Ver](https://www.roblox.com/groups/${g.group.id})`).join('\n')
+    : '*No groups*';
+  return new EmbedBuilder()
+    .setColor(0x9B59B6)
+    .setAuthor({ name: `${d.userData.displayName} (@${d.userData.name})`, url: `https://www.roblox.com/users/${d.userId}/profile` })
+    .setTitle(`Groups (${groups.length})`)
+    .setDescription(desc)
+    .setThumbnail(d.avatarUrl)
+    .setFooter({ text: `ID: ${d.userId}` });
+}
+
+// Build Games embed
+function buildGamesEmbed(d) {
+  const games = d.gamesData.data || [];
+  const desc = games.length
+    ? games.slice(0, 10).map(g => `**[${g.name}](https://www.roblox.com/games/${g.rootPlace?.id})** — 👁️ ${fmt(g.visits)} visitas`).join('\n')
+    : '*No public games*';
+  return new EmbedBuilder()
+    .setColor(0x57F287)
+    .setAuthor({ name: `${d.userData.displayName} (@${d.userData.name})`, url: `https://www.roblox.com/users/${d.userId}/profile` })
+    .setTitle(`Games (${games.length})`)
+    .setDescription(desc)
+    .setThumbnail(d.avatarUrl)
+    .setFooter({ text: `ID: ${d.userId}` });
+}
+
+// Build Currently Wearing embed
+function buildWearingEmbed(d) {
+  const items = d.wearingData || [];
+  const desc = items.length
+    ? items.slice(0, 15).map(i => `• [${i.name}](https://www.roblox.com/catalog/${i.id})`).join('\n')
+    : '*No items / private*';
+  return new EmbedBuilder()
+    .setColor(0xFEE75C)
+    .setAuthor({ name: `${d.userData.displayName} (@${d.userData.name})`, url: `https://www.roblox.com/users/${d.userId}/profile` })
+    .setTitle('Currently Wearing')
+    .setDescription(desc)
+    .setThumbnail(d.avatarUrl)
+    .setFooter({ text: `ID: ${d.userId}` });
+}
+
+function buildSelectMenu(userId) {
+  return new ActionRowBuilder().addComponents(
+    new StringSelectMenuBuilder()
+      .setCustomId(`roblox_view:${userId}`)
+      .setPlaceholder('User Profile')
+      .addOptions([
+        { label: 'User Profile', value: 'profile',  emoji: '👤', default: true  },
+        { label: 'Avatar',       value: 'avatar',   emoji: '🧍'                 },
+        { label: 'Groups',       value: 'groups',   emoji: '👾'                 },
+        { label: 'Games',        value: 'games',    emoji: '🎮'                 },
+        { label: 'Currently Wearing', value: 'wearing', emoji: '👕'             },
+      ])
+  );
+}
+
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('roblox')
     .setDescription('Comandos de Roblox / Roblox commands')
     .addSubcommand(s => s.setName('user')
       .setDescription('Perfil completo de un usuario de Roblox')
-      .addStringOption(o => o.setName('username').setDescription('Nombre de usuario').setRequired(true)))
+      .addStringOption(o => o.setName('username').setDescription('Nombre de usuario de Roblox').setRequired(true)))
     .addSubcommand(s => s.setName('avatar')
       .setDescription('Avatar de un usuario de Roblox')
       .addStringOption(o => o.setName('username').setDescription('Nombre de usuario').setRequired(true))
@@ -60,52 +189,59 @@ module.exports = {
 
     await interaction.deferReply();
 
-    // ── USER ─────────────────────────────────────────────────────────────────
+    // ── USER (Avi-style) ─────────────────────────────────────────────────────
     if (sub === 'user') {
       const username = interaction.options.getString('username');
       const cacheKey = `roblox:user:${username.toLowerCase()}`;
       try {
-        let data = cache.get(cacheKey);
-        const fromCache = !!data;
+        let d = cache.get(cacheKey);
+        const fromCache = !!d;
 
-        if (!data) {
+        if (!d) {
           const resolved = await resolveUser(username);
           if (!resolved) return interaction.editReply({ content: `❌ No se encontró **${username}** en Roblox.` });
           const userId = resolved.id;
 
           const [
             userRes, friendsRes, followersRes, followingRes,
-            badgesRes, groupsRes, gamesRes, premiumRes, avatarRes
+            badgesRes, groupsRes, gamesRes, premiumRes,
+            avatarHeadRes, avatarFullRes, inventoryRes
           ] = await Promise.all([
             fetch(`https://users.roblox.com/v1/users/${userId}`),
             fetch(`https://friends.roblox.com/v1/users/${userId}/friends/count`),
             fetch(`https://friends.roblox.com/v1/users/${userId}/followers/count`),
             fetch(`https://friends.roblox.com/v1/users/${userId}/followings/count`),
-            fetch(`https://badges.roblox.com/v1/users/${userId}/badges?limit=6&sortOrder=Desc`),
+            fetch(`https://badges.roblox.com/v1/users/${userId}/badges?limit=10&sortOrder=Desc`),
             fetch(`https://groups.roblox.com/v1/users/${userId}/groups/roles`),
-            fetch(`https://games.roblox.com/v2/users/${userId}/games?limit=6&sortOrder=Desc`),
+            fetch(`https://games.roblox.com/v2/users/${userId}/games?limit=10&sortOrder=Desc`),
             fetch(`https://premiumfeatures.roblox.com/v1/users/${userId}/validate-membership`),
-            fetch(`https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${userId}&size=420x420&format=Png`)
+            fetch(`https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${userId}&size=150x150&format=Png`),
+            fetch(`https://thumbnails.roblox.com/v1/users/avatar?userIds=${userId}&size=720x720&format=Png`),
+            fetch(`https://inventory.roblox.com/v1/users/${userId}/assets/collectibles?limit=100&sortOrder=Desc`)
           ]);
 
           const [
             userData, friendsData, followersData, followingData,
-            badgesData, groupsData, gamesData, avatarData
+            badgesData, groupsData, gamesData,
+            avatarHeadData, avatarFullData, inventoryData
           ] = await Promise.all([
             userRes.json(), friendsRes.json(), followersRes.json(), followingRes.json(),
-            badgesRes.json(), groupsRes.json(), gamesRes.json(), avatarRes.json()
+            badgesRes.json(), groupsRes.json(), gamesRes.json(),
+            avatarHeadRes.json(), avatarFullRes.json(),
+            inventoryRes.json()
           ]);
 
           let isPremium = false;
           try {
-            const premiumData = await premiumRes.json().catch(() => null);
-            if (typeof premiumData === 'boolean') isPremium = premiumData;
-            else if (premiumData?.isPremium) isPremium = true;
+            const pd = await premiumRes.json().catch(() => null);
+            if (typeof pd === 'boolean') isPremium = pd;
+            else if (pd?.isPremium) isPremium = true;
             else isPremium = premiumRes.status === 200;
           } catch { isPremium = false; }
 
           // Presence
-          let presenceStatus = L('⚫ Offline', '⚫ Offline');
+          let presenceStatus = { type: 0, lastLocation: null };
+          let lastOnline = null;
           try {
             const presRes = await fetch('https://presence.roblox.com/v1/presence/users', {
               method: 'POST',
@@ -115,57 +251,81 @@ module.exports = {
             const presData = await presRes.json();
             const p = presData.userPresences?.[0];
             if (p) {
-              const types = {
-                0: L('⚫ Offline', '⚫ Offline'),
-                1: L('🟢 Online (Web)', '🟢 Online (Web)'),
-                2: L('🎮 En juego', '🎮 In game'),
-                3: L('🔧 En Studio', '🔧 In Studio')
-              };
-              presenceStatus = types[p.userPresenceType] || L('⚫ Offline', '⚫ Offline');
-              if (p.lastLocation && p.userPresenceType === 2) presenceStatus += `\n└ *${p.lastLocation}*`;
+              presenceStatus = { type: p.userPresenceType, lastLocation: p.lastLocation };
+              if (p.lastOnline) lastOnline = new Date(p.lastOnline);
             }
-          } catch { /* presence may require auth */ }
+          } catch { /* skip */ }
 
-          data = { userId, userData, friendsData, followersData, followingData, badgesData, groupsData, gamesData, avatarData, isPremium, presenceStatus };
-          cache.set(cacheKey, data, 10 * 60 * 1000); // 10 min cache
+          // Currently wearing
+          let wearingData = [];
+          try {
+            const wearRes = await fetch(`https://avatar.roblox.com/v1/users/${userId}/currently-wearing`);
+            const wearJson = await wearRes.json();
+            if (wearJson.assetIds?.length) {
+              // Fetch names for up to 15 items
+              const ids = wearJson.assetIds.slice(0, 15);
+              const detailRes = await fetch(`https://catalog.roblox.com/v1/catalog/items/details`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ items: ids.map(id => ({ itemType: 'Asset', id })) })
+              });
+              const detailData = await detailRes.json();
+              wearingData = detailData.data || ids.map(id => ({ id, name: `Asset ${id}` }));
+            }
+          } catch { /* skip */ }
+
+          d = {
+            userId,
+            userData, friendsData, followersData, followingData,
+            badgesData, groupsData, gamesData, inventoryData,
+            avatarUrl: avatarHeadData.data?.[0]?.imageUrl || null,
+            fullAvatarUrl: avatarFullData.data?.[0]?.imageUrl || null,
+            isPremium, presenceStatus, lastOnline, wearingData
+          };
+          cache.set(cacheKey, d, 10 * 60 * 1000);
         }
 
-        const { userId, userData, friendsData, followersData, followingData, badgesData, groupsData, gamesData, avatarData, isPremium, presenceStatus } = data;
-        const avatarUrl = avatarData.data?.[0]?.imageUrl || null;
-        const createdAt = new Date(userData.created);
-        const totalDays = Math.floor((Date.now() - createdAt.getTime()) / 86400000);
-        const years = Math.floor(totalDays / 365);
-        const ageStr = years > 0 ? `${years} ${L('año(s)', 'year(s)')}, ${totalDays % 365} ${L('día(s)', 'day(s)')}` : `${totalDays} ${L('día(s)', 'day(s)')}`;
+        const embed = buildProfileEmbed(d);
+        const row = buildSelectMenu(d.userId);
 
-        const badgeList = badgesData.data?.slice(0, 5).map(b => `• ${b.name}`).join('\n') || `• ${L('Ninguno', 'None')}`;
-        const groupList = groupsData.data?.slice(0, 4).map(g => `• **${g.group.name}** *(${g.role.name})*`).join('\n') || `• ${L('Ninguno', 'None')}`;
-        const gameList = gamesData.data?.slice(0, 4).map(g => `• [${g.name}](https://www.roblox.com/games/${g.rootPlace?.id})`).join('\n') || `• ${L('Ninguno', 'None')}`;
+        const msg = await interaction.editReply({ embeds: [embed], components: [row] });
 
-        const isBanned = userData.isBanned;
-        const embed = new EmbedBuilder()
-          .setTitle(`${isBanned ? '🚫 ' : ''}${userData.displayName} (@${userData.name})`)
-          .setURL(`https://www.roblox.com/users/${userId}/profile`)
-          .setColor(isBanned ? 0xFF0000 : isPremium ? 0xF5A623 : 0x00B2FF)
-          .setDescription(userData.description?.slice(0, 350) || `*${L('Sin descripción', 'No description')}*`)
-          .addFields(
-            { name: '🆔 ID', value: `${userId}`, inline: true },
-            { name: '💎 Premium', value: isPremium ? '✅' : '❌', inline: true },
-            { name: '🚦 Estado', value: presenceStatus, inline: true },
-            { name: L('📅 Creado', '📅 Created'), value: `<t:${Math.floor(createdAt.getTime() / 1000)}:D>`, inline: true },
-            { name: L('⏳ Antigüedad', '⏳ Age'), value: ageStr, inline: true },
-            { name: L('🔒 Cuenta', '🔒 Account'), value: isBanned ? `🚫 ${L('Baneada', 'Banned')}` : `✅ ${L('Activa', 'Active')}`, inline: true },
-            { name: L('👥 Amigos', '👥 Friends'), value: fmt(friendsData.count), inline: true },
-            { name: L('👁️ Seguidores', '👁️ Followers'), value: fmt(followersData.count), inline: true },
-            { name: L('➡️ Siguiendo', '➡️ Following'), value: fmt(followingData.count), inline: true },
-            { name: `🏅 ${L('Últimos badges', 'Recent badges')} (${badgesData.data?.length ?? 0})`, value: badgeList },
-            { name: `👾 ${L('Grupos', 'Groups')} (${groupsData.data?.length ?? 0})`, value: groupList, inline: true },
-            { name: `🎮 ${L('Juegos creados', 'Created games')} (${gamesData.data?.length ?? 0})`, value: gameList, inline: true }
-          )
-          .setFooter({ text: `Roblox API${fromCache ? ' • 📦 Caché' : ''}` })
-          .setTimestamp();
+        // Collector for select menu interactions
+        const collector = msg.createMessageComponentCollector({ time: 5 * 60 * 1000 });
+        collector.on('collect', async i => {
+          if (i.user.id !== interaction.user.id) {
+            return i.reply({ content: '❌ Solo quien usó el comando puede navegar.', ephemeral: true });
+          }
+          const view = i.values[0];
+          let newEmbed;
+          if (view === 'profile') newEmbed = buildProfileEmbed(d);
+          else if (view === 'avatar') newEmbed = buildAvatarEmbed(d);
+          else if (view === 'groups') newEmbed = buildGroupsEmbed(d);
+          else if (view === 'games') newEmbed = buildGamesEmbed(d);
+          else if (view === 'wearing') newEmbed = buildWearingEmbed(d);
 
-        if (avatarUrl) embed.setThumbnail(avatarUrl);
-        return interaction.editReply({ embeds: [embed] });
+          // Update select menu default
+          const updatedRow = new ActionRowBuilder().addComponents(
+            new StringSelectMenuBuilder()
+              .setCustomId(`roblox_view:${d.userId}`)
+              .setPlaceholder(i.values[0])
+              .addOptions([
+                { label: 'User Profile',      value: 'profile',  emoji: '👤', default: view === 'profile'  },
+                { label: 'Avatar',            value: 'avatar',   emoji: '🧍', default: view === 'avatar'   },
+                { label: 'Groups',            value: 'groups',   emoji: '👾', default: view === 'groups'   },
+                { label: 'Games',             value: 'games',    emoji: '🎮', default: view === 'games'    },
+                { label: 'Currently Wearing', value: 'wearing',  emoji: '👕', default: view === 'wearing'  },
+              ])
+          );
+
+          await i.update({ embeds: [newEmbed], components: [updatedRow] });
+        });
+
+        collector.on('end', () => {
+          interaction.editReply({ components: [] }).catch(() => {});
+        });
+
+        return;
       } catch (err) {
         console.error('[roblox user]', err);
         return interaction.editReply({ content: '❌ Error al obtener datos de Roblox.' });
