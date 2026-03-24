@@ -119,7 +119,8 @@ module.exports = {
       const razon = interaction.options.getString('reason') || L('No especificada', 'Not specified');
       const dias = interaction.options.getInteger('days') || 7;
       const miembro = await interaction.guild.members.fetch(usuario.id).catch(() => null);
-      if (usuario.id === interaction.user.id) return interaction.reply({ content: '❌', flags: 64 });
+      if (usuario.id === interaction.user.id) return interaction.reply({ content: L('❌ No puedes hacerte softban a ti mismo.', '❌ You cannot softban yourself.'), flags: 64 });
+      if (usuario.id === interaction.guild.ownerId) return interaction.reply({ content: L('❌ No puedes banear al dueño.', '❌ Cannot ban the owner.'), flags: 64 });
       if (miembro?.roles.highest.position >= interaction.member.roles.highest.position) return interaction.reply({ content: L('❌ Rol igual o superior.', '❌ Equal or higher role.'), flags: 64 });
       await interaction.deferReply();
       await interaction.guild.members.ban(usuario, { deleteMessageSeconds: dias * 86400, reason: `[SOFTBAN] ${razon}` });
@@ -134,7 +135,8 @@ module.exports = {
       const razon = interaction.options.getString('reason') || L('No especificada', 'Not specified');
       const deleteDays = interaction.options.getInteger('delete_days') || 0;
       const miembro = await interaction.guild.members.fetch(usuario.id).catch(() => null);
-      if (usuario.id === interaction.user.id || usuario.id === interaction.guild.ownerId) return interaction.reply({ content: '❌', flags: 64 });
+      if (usuario.id === interaction.user.id) return interaction.reply({ content: L('❌ No puedes banearte temporalmente a ti mismo.', '❌ You cannot tempban yourself.'), flags: 64 });
+      if (usuario.id === interaction.guild.ownerId) return interaction.reply({ content: L('❌ No puedes banear al dueño.', '❌ Cannot ban the owner.'), flags: 64 });
       if (miembro?.roles.highest.position >= interaction.member.roles.highest.position) return interaction.reply({ content: L('❌ Rol igual o superior.', '❌ Equal or higher role.'), flags: 64 });
       await interaction.deferReply();
       const expiresAt = Date.now() + days * 86400000;
@@ -207,7 +209,8 @@ module.exports = {
       const reason = interaction.options.getString('reason') || L('No especificada', 'Not specified');
       const member = await interaction.guild.members.fetch(usuario.id).catch(() => null);
       if (!member) return interaction.reply({ content: '❌ Usuario no encontrado.', flags: 64 });
-      if (usuario.id === interaction.user.id || usuario.id === interaction.guild.ownerId) return interaction.reply({ content: '❌', flags: 64 });
+      if (usuario.id === interaction.user.id) return interaction.reply({ content: L('❌ No puedes aislarte a ti mismo.', '❌ You cannot timeout yourself.'), flags: 64 });
+      if (usuario.id === interaction.guild.ownerId) return interaction.reply({ content: L('❌ No puedes aislar al dueño.', '❌ Cannot timeout the owner.'), flags: 64 });
       if (member.roles.highest.position >= interaction.member.roles.highest.position) return interaction.reply({ content: L('❌ Rol igual o superior.', '❌ Equal or higher role.'), flags: 64 });
       const expiresAt = Date.now() + duration * 60000;
       try { await usuario.send({ embeds: [new EmbedBuilder().setTitle(L('⏱️ Has sido aislado','⏱️ You have been timed out')).addFields({ name: L('Razón','Reason'), value: reason }, { name: L('Duración','Duration'), value: `${duration} min` }, { name: L('Expira','Expires'), value: `<t:${Math.floor(expiresAt/1000)}:R>` }).setColor(0xFFA500).setTimestamp()] }); } catch {}

@@ -1521,26 +1521,8 @@ client.on('channelPinsUpdate', async (channel, time) => {
 
 // ==================== FIN SISTEMA DE LOGS ====================
 
-// Log: Uso de comandos slash
-client.on('interactionCreate', async (interaction) => {
-  if (!interaction.isChatInputCommand()) return;
-  if (!interaction.guild) return;
-  const sub = interaction.options.getSubcommand(false);
-  const subGroup = interaction.options.getSubcommandGroup(false);
-  const fullCmd = ['/' + interaction.commandName, subGroup, sub].filter(Boolean).join(' ');
-  const embed = new EmbedBuilder()
-    .setTitle('⌨️ Comando Usado')
-    .setColor(0x5865F2)
-    .setThumbnail(interaction.user.displayAvatarURL())
-    .addFields(
-      { name: '👤 Usuario', value: `${interaction.user.tag} (<@${interaction.user.id}>)`, inline: true },
-      { name: '⌨️ Comando', value: `\`${fullCmd}\``, inline: true },
-      { name: '📍 Canal', value: `<#${interaction.channel.id}>`, inline: true }
-    )
-    .setFooter({ text: `ID: ${interaction.user.id}` })
-    .setTimestamp();
-  await sendTypedLog(interaction.guild, 'commands', embed);
-});
+// Log: Uso de comandos slash — se registra DESPUÉS de ejecutar exitosamente
+// (el log se hace dentro del handler principal de interactionCreate)
 
 // Manejar comandos slash
 client.on('interactionCreate', async (interaction) => {
@@ -1782,6 +1764,24 @@ client.on('interactionCreate', async (interaction) => {
 
   try {
     await command.execute(interaction);
+    // Log del comando — solo si se ejecutó sin error
+    try {
+      const sub = interaction.options.getSubcommand(false);
+      const subGroup = interaction.options.getSubcommandGroup(false);
+      const fullCmd = ['/' + interaction.commandName, subGroup, sub].filter(Boolean).join(' ');
+      const cmdEmbed = new EmbedBuilder()
+        .setTitle('⌨️ Comando Usado')
+        .setColor(0x5865F2)
+        .setThumbnail(interaction.user.displayAvatarURL())
+        .addFields(
+          { name: '👤 Usuario', value: `${interaction.user.tag} (<@${interaction.user.id}>)`, inline: true },
+          { name: '⌨️ Comando', value: `\`${fullCmd}\``, inline: true },
+          { name: '📍 Canal', value: `<#${interaction.channel.id}>`, inline: true }
+        )
+        .setFooter({ text: `ID: ${interaction.user.id}` })
+        .setTimestamp();
+      await sendTypedLog(interaction.guild, 'commands', cmdEmbed);
+    } catch { /* no bloquear si falla el log */ }
   } catch (error) {
     console.error(`[CMD ERROR] /${interaction.commandName}:`, error);
     const errorMessage = {

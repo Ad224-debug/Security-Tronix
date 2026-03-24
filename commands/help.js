@@ -184,6 +184,7 @@ module.exports = {
     };
 
     if (category && commands[category]) {
+      const cat = commands[category];
       const embed = new EmbedBuilder()
         .setTitle(cat.title)
         .setDescription(cat.commands.map(cmd => `**${cmd.name}** — ${cmd.desc}`).join('\n'))
