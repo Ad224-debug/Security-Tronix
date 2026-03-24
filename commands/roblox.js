@@ -177,30 +177,12 @@ module.exports = {
     .addSubcommand(s => s.setName('user')
       .setDescription('Perfil completo de un usuario de Roblox')
       .addStringOption(o => o.setName('username').setDescription('Nombre de usuario de Roblox').setRequired(true)))
-    .addSubcommand(s => s.setName('avatar')
-      .setDescription('Avatar de un usuario de Roblox')
-      .addStringOption(o => o.setName('username').setDescription('Nombre de usuario').setRequired(true))
-      .addStringOption(o => o.setName('tipo').setDescription('Tipo de imagen')
-        .addChoices(
-          { name: '🎭 Headshot (cara)', value: 'headshot' },
-          { name: '👤 Busto', value: 'bust' },
-          { name: '🧍 Cuerpo completo', value: 'full' }
-        )))
     .addSubcommand(s => s.setName('game')
       .setDescription('Información de un juego de Roblox')
       .addStringOption(o => o.setName('query').setDescription('Nombre o ID del juego').setRequired(true)))
     .addSubcommand(s => s.setName('group')
       .setDescription('Información de un grupo de Roblox')
-      .addStringOption(o => o.setName('query').setDescription('Nombre o ID del grupo').setRequired(true)))
-    .addSubcommand(s => s.setName('badges')
-      .setDescription('Badges de un usuario de Roblox')
-      .addStringOption(o => o.setName('username').setDescription('Nombre de usuario').setRequired(true)))
-    .addSubcommand(s => s.setName('friends')
-      .setDescription('Lista de amigos de un usuario de Roblox')
-      .addStringOption(o => o.setName('username').setDescription('Nombre de usuario').setRequired(true)))
-    .addSubcommand(s => s.setName('rap')
-      .setDescription('Valor de inventario (RAP) de un usuario de Roblox')
-      .addStringOption(o => o.setName('username').setDescription('Nombre de usuario').setRequired(true))),
+      .addStringOption(o => o.setName('query').setDescription('Nombre o ID del grupo').setRequired(true))),
 
   async execute(interaction) {
     const sub = interaction.options.getSubcommand();
@@ -353,61 +335,25 @@ module.exports = {
       }
     }
 
-    // ── AVATAR ───────────────────────────────────────────────────────────────
-    if (sub === 'avatar') {
-      const username = interaction.options.getString('username');
-      const tipo = interaction.options.getString('tipo') || 'full';
-      try {
-        const resolved = await resolveUser(username);
-        if (!resolved) return interaction.editReply({ content: `❌ No se encontró **${username}** en Roblox.` });
-        const userId = resolved.id;
-
-        const endpoints = {
-          headshot: `https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${userId}&size=720x720&format=Png`,
-          bust:     `https://thumbnails.roblox.com/v1/users/avatar-bust?userIds=${userId}&size=420x420&format=Png`,
-          full:     `https://thumbnails.roblox.com/v1/users/avatar?userIds=${userId}&size=720x720&format=Png`
-        };
-        const labels = { headshot: '🎭 Headshot', bust: '👤 Busto', full: '🧍 Cuerpo completo' };
-
-        const thumbRes = await fetch(endpoints[tipo]);
-        const thumbData = await thumbRes.json();
-        const imageUrl = thumbData.data?.[0]?.imageUrl;
-        if (!imageUrl) return interaction.editReply({ content: '❌ No se pudo obtener el avatar.' });
-
-        const embed = new EmbedBuilder()
-          .setTitle(`${labels[tipo]} — ${resolved.displayName} (@${username})`)
-          .setURL(`https://www.roblox.com/users/${userId}/profile`)
-          .setColor(0x00B2FF)
-          .setImage(imageUrl)
-          .setFooter({ text: `ID: ${userId} • Roblox` })
-          .setTimestamp();
-
-        return interaction.editReply({ embeds: [embed] });
-      } catch (err) {
-        console.error('[roblox avatar]', err);
-        return interaction.editReply({ content: '❌ Error al obtener el avatar.' });
-      }
-    }
-
     // ── GAME ─────────────────────────────────────────────────────────────────
     if (sub === 'game') {
       const query = interaction.options.getString('query');
       try {
-        let universeId, placeId;
+        let universeId;
 
-        // If numeric, treat as place ID
         if (/^\d+$/.test(query)) {
-          placeId = query;
-          const convRes = await fetch(`https://apis.roblox.com/universes/v1/places/${placeId}/universe`);
+          // Numeric: could be placeId or universeId — try place→universe first
+          const convRes = await fetch(`https://apis.roblox.com/universes/v1/places/${query}/universe`);
           const convData = await convRes.json();
           universeId = convData.universeId;
+          // If that fails, treat as universeId directly
+          if (!universeId) universeId = query;
         } else {
-          // Search by name
-          const searchRes = await fetch(`https://games.roblox.com/v1/games/list?model.keyword=${encodeURIComponent(query)}&model.maxRows=1`);
+          // Search by name using the games search API
+          const searchRes = await fetch(`https://games.roblox.com/v1/games/list?model.keyword=${encodeURIComponent(query)}&model.maxRows=6&model.startRows=0`);
           const searchData = await searchRes.json();
           if (!searchData.games?.length) return interaction.editReply({ content: `❌ No se encontró el juego **${query}**.` });
           universeId = searchData.games[0].universeId;
-          placeId = searchData.games[0].placeId;
         }
 
         if (!universeId) return interaction.editReply({ content: `❌ No se encontró el juego **${query}**.` });
@@ -503,138 +449,5 @@ module.exports = {
       }
     }
 
-    // ── BADGES ───────────────────────────────────────────────────────────────
-    if (sub === 'badges') {
-      const username = interaction.options.getString('username');
-      try {
-        const resolved = await resolveUser(username);
-        if (!resolved) return interaction.editReply({ content: `❌ No se encontró **${username}** en Roblox.` });
-        const userId = resolved.id;
-
-        const badgesRes = await fetch(`https://badges.roblox.com/v1/users/${userId}/badges?limit=24&sortOrder=Desc`);
-        const badgesData = await badgesRes.json();
-        const badges = badgesData.data || [];
-
-        const embed = new EmbedBuilder()
-          .setTitle(`🏅 Badges — ${resolved.displayName} (@${username})`)
-          .setURL(`https://www.roblox.com/users/${userId}/profile`)
-          .setColor(0xF5A623)
-          .setFooter({ text: `ID: ${userId} • Roblox` })
-          .setTimestamp();
-
-        if (!badges.length) {
-          embed.setDescription(L('Este usuario no tiene badges.', 'This user has no badges.'));
-        } else {
-          const badgeText = badges.slice(0, 20).map((b, i) => `**${i + 1}.** ${b.name}`).join('\n');
-          embed.setDescription(badgeText);
-          embed.addFields({ name: L('Total mostrado', 'Total shown'), value: `${badges.length}`, inline: true });
-        }
-
-        return interaction.editReply({ embeds: [embed] });
-      } catch (err) {
-        console.error('[roblox badges]', err);
-        return interaction.editReply({ content: '❌ Error al obtener badges.' });
-      }
-    }
-
-    // ── FRIENDS ──────────────────────────────────────────────────────────────
-    if (sub === 'friends') {
-      const username = interaction.options.getString('username');
-      try {
-        const resolved = await resolveUser(username);
-        if (!resolved) return interaction.editReply({ content: `❌ No se encontró **${username}** en Roblox.` });
-        const userId = resolved.id;
-
-        const [friendsRes, countRes] = await Promise.all([
-          fetch(`https://friends.roblox.com/v1/users/${userId}/friends?limit=25`),
-          fetch(`https://friends.roblox.com/v1/users/${userId}/friends/count`)
-        ]);
-
-        const friendsData = await friendsRes.json();
-        const countData = await countRes.json();
-        const friends = friendsData.data || [];
-        const total = countData.count ?? friends.length;
-
-        const embed = new EmbedBuilder()
-          .setTitle(`👥 Amigos — ${resolved.displayName} (@${username})`)
-          .setURL(`https://www.roblox.com/users/${userId}/profile`)
-          .setColor(0x57F287)
-          .setFooter({ text: `ID: ${userId} • Roblox` })
-          .setTimestamp();
-
-        if (!friends.length) {
-          embed.setDescription(L('Este usuario no tiene amigos públicos.', 'This user has no public friends.'));
-        } else {
-          const friendText = friends.slice(0, 20).map((f, i) => `**${i + 1}.** [${f.displayName}](https://www.roblox.com/users/${f.id}/profile) (@${f.name})`).join('\n');
-          embed.setDescription(friendText);
-          embed.addFields({ name: L('Total de amigos', 'Total friends'), value: `${fmt(total)}`, inline: true });
-        }
-
-        return interaction.editReply({ embeds: [embed] });
-      } catch (err) {
-        console.error('[roblox friends]', err);
-        return interaction.editReply({ content: '❌ Error al obtener amigos.' });
-      }
-    }
-
-    // ── RAP ──────────────────────────────────────────────────────────────────
-    if (sub === 'rap') {
-      const username = interaction.options.getString('username');
-      try {
-        const resolved = await resolveUser(username);
-        if (!resolved) return interaction.editReply({ content: `❌ No se encontró **${username}** en Roblox.` });
-        const userId = resolved.id;
-
-        // RAP requires inventory to be public
-        const [inventoryRes, avatarRes] = await Promise.all([
-          fetch(`https://inventory.roblox.com/v1/users/${userId}/assets/collectibles?limit=100&sortOrder=Desc`),
-          fetch(`https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${userId}&size=150x150&format=Png`)
-        ]);
-
-        const inventoryData = await inventoryRes.json();
-        const avatarData = await avatarRes.json();
-        const avatarUrl = avatarData.data?.[0]?.imageUrl || null;
-
-        if (inventoryData.errors || !inventoryData.data) {
-          const embed = new EmbedBuilder()
-            .setTitle(`💰 RAP — ${resolved.displayName} (@${username})`)
-            .setURL(`https://www.roblox.com/users/${userId}/profile`)
-            .setColor(0xFEE75C)
-            .setDescription(L('⚠️ El inventario de este usuario es privado o no tiene limiteds.', '⚠️ This user\'s inventory is private or they have no limiteds.'))
-            .setFooter({ text: `ID: ${userId} • Roblox` })
-            .setTimestamp();
-          if (avatarUrl) embed.setThumbnail(avatarUrl);
-          return interaction.editReply({ embeds: [embed] });
-        }
-
-        const items = inventoryData.data || [];
-        const totalRAP = items.reduce((sum, item) => sum + (item.recentAveragePrice || 0), 0);
-        const topItems = items
-          .sort((a, b) => (b.recentAveragePrice || 0) - (a.recentAveragePrice || 0))
-          .slice(0, 8);
-
-        const itemList = topItems.length
-          ? topItems.map(i => `• **${i.name}** — ${fmt(i.recentAveragePrice)} R$`).join('\n')
-          : L('Sin items con RAP', 'No items with RAP');
-
-        const embed = new EmbedBuilder()
-          .setTitle(`💰 RAP — ${resolved.displayName} (@${username})`)
-          .setURL(`https://www.roblox.com/users/${userId}/profile`)
-          .setColor(0xFEE75C)
-          .addFields(
-            { name: L('💎 RAP Total', '💎 Total RAP'), value: `**${fmt(totalRAP)} R$**`, inline: true },
-            { name: L('📦 Limiteds', '📦 Limiteds'), value: `${items.length}`, inline: true },
-            { name: L('🏆 Top items', '🏆 Top items'), value: itemList }
-          )
-          .setFooter({ text: `ID: ${userId} • Roblox` })
-          .setTimestamp();
-
-        if (avatarUrl) embed.setThumbnail(avatarUrl);
-        return interaction.editReply({ embeds: [embed] });
-      } catch (err) {
-        console.error('[roblox rap]', err);
-        return interaction.editReply({ content: '❌ Error al obtener el RAP.' });
-      }
-    }
   }
 };

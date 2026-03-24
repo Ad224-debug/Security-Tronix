@@ -174,13 +174,9 @@ module.exports = {
         title: '🟥 Roblox',
         color: 0xFF0000,
         commands: [
-          { name: '/roblox user', desc: L('Perfil completo de un usuario (badges, grupos, juegos, presencia)', 'Full user profile (badges, groups, games, presence)') },
-          { name: '/roblox avatar', desc: L('Avatar de un usuario (headshot, busto o cuerpo completo)', 'User avatar (headshot, bust or full body)') },
-          { name: '/roblox game', desc: L('Info de un juego (visitas, jugadores, creador)', 'Game info (visits, players, creator)') },
-          { name: '/roblox group', desc: L('Info de un grupo (miembros, dueño, tipo)', 'Group info (members, owner, type)') },
-          { name: '/roblox badges', desc: L('Lista de badges de un usuario', 'User badge list') },
-          { name: '/roblox friends', desc: L('Lista de amigos de un usuario', 'User friend list') },
-          { name: '/roblox rap', desc: L('Valor de inventario (RAP) de un usuario', 'User inventory value (RAP)') },
+          { name: '/roblox user', desc: L('Perfil completo con avatar, grupos, juegos, RAP, badges y presencia', 'Full profile with avatar, groups, games, RAP, badges and presence') },
+          { name: '/roblox game', desc: L('Info de un juego por nombre o ID (visitas, jugadores, creador)', 'Game info by name or ID (visits, players, creator)') },
+          { name: '/roblox group', desc: L('Info de un grupo por nombre o ID (miembros, dueño, tipo)', 'Group info by name or ID (members, owner, type)') },
         ]
       },
     };
