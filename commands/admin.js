@@ -27,7 +27,14 @@ module.exports = {
       .addIntegerOption(o => o.setName('limit').setDescription('Máximo de mensajes a revisar (1-500)').setMinValue(1).setMaxValue(500)))
     .addSubcommand(s => s.setName('backup').setDescription('Gestionar backups')
       .addStringOption(o => o.setName('action').setDescription('Acción').setRequired(true).addChoices({ name: 'Crear', value: 'create' }, { name: 'Listar', value: 'list' }, { name: 'Restaurar', value: 'restore' }, { name: 'Eliminar', value: 'delete' }))
-      .addStringOption(o => o.setName('name').setDescription('Nombre del backup (para restaurar/eliminar)'))),
+      .addStringOption(o => o.setName('name').setDescription('Nombre del backup (para restaurar/eliminar)')))
+    .addSubcommand(s => s.setName('massban').setDescription('Banear múltiples usuarios por ID')
+      .addStringOption(o => o.setName('ids').setDescription('IDs separados por espacios o comas').setRequired(true))
+      .addStringOption(o => o.setName('reason').setDescription('Razón'))
+      .addIntegerOption(o => o.setName('days').setDescription('Días de mensajes a borrar (0-7)').setMinValue(0).setMaxValue(7)))
+    .addSubcommand(s => s.setName('masskick').setDescription('Expulsar múltiples usuarios por ID o mención')
+      .addStringOption(o => o.setName('ids').setDescription('IDs separados por espacios o comas').setRequired(true))
+      .addStringOption(o => o.setName('reason').setDescription('Razón'))),
 
   async execute(interaction) {
     const sub = interaction.options.getSubcommand();
@@ -180,6 +187,106 @@ module.exports = {
         if (result.success) return interaction.reply({ content: L(`✅ Backup \`${backupName}\` eliminado.`, `✅ Backup \`${backupName}\` deleted.`), flags: 64 });
         return interaction.reply({ content: `❌ Error: ${result.error}`, flags: 64 });
       }
+    }
+
+    // ── MASSBAN ──────────────────────────────────────────────────────────────
+    if (sub === 'massban') {
+      const raw = interaction.options.getString('ids');
+      const razon = interaction.options.getString('reason') || L('Massban', 'Massban');
+      const days = interaction.options.getInteger('days') ?? 1;
+      // Parse IDs — acepta espacios, comas, menciones <@ID>
+      const ids = [...new Set(raw.match(/\d{17,20}/g) || [])];
+      if (ids.length === 0) return interaction.reply({ content: '❌ No se encontraron IDs válidos.', flags: 64 });
+      await interaction.deferReply({ flags: 64 });
+
+      let baneados = 0, fallidos = 0, yaEstaban = 0;
+      const resultados = [];
+
+      for (const id of ids) {
+        try {
+          // Verificar si ya está baneado
+          const existingBan = await interaction.guild.bans.fetch(id).catch(() => null);
+          if (existingBan) { yaEstaban++; resultados.push(`⚪ \`${id}\` — ya baneado`); continue; }
+          await interaction.guild.members.ban(id, { reason: `[Massban] ${razon} | Por: ${interaction.user.tag}`, deleteMessageSeconds: days * 86400 });
+          baneados++;
+          resultados.push(`✅ \`${id}\``);
+        } catch {
+          fallidos++;
+          resultados.push(`❌ \`${id}\``);
+        }
+        // Rate limit protection
+        await new Promise(r => setTimeout(r, 500));
+      }
+
+      const { createCase } = require('../utils/createCase');
+      const caseId = createCase(interaction.guild.id, 'massban', ids.join(','), interaction.user.id, razon);
+
+      const embed = new EmbedBuilder()
+        .setTitle('🔨 Massban Completado')
+        .setColor(0x8B0000)
+        .addFields(
+          { name: '✅ Baneados', value: `${baneados}`, inline: true },
+          { name: '❌ Fallidos', value: `${fallidos}`, inline: true },
+          { name: '⚪ Ya baneados', value: `${yaEstaban}`, inline: true },
+          { name: '📝 Razón', value: razon, inline: false },
+          { name: '🛡️ Moderador', value: `${interaction.user}`, inline: true },
+          { name: '📋 Caso', value: `#${caseId}`, inline: true }
+        )
+        .setDescription(resultados.slice(0, 20).join('\n') + (resultados.length > 20 ? `\n...y ${resultados.length - 20} más` : ''))
+        .setTimestamp();
+
+      await interaction.editReply({ embeds: [embed] });
+      await interaction.client.sendTypedLog(interaction.guild, 'bans', embed);
+      return;
+    }
+
+    // ── MASSKICK ─────────────────────────────────────────────────────────────
+    if (sub === 'masskick') {
+      const raw = interaction.options.getString('ids');
+      const razon = interaction.options.getString('reason') || L('Masskick', 'Masskick');
+      const ids = [...new Set(raw.match(/\d{17,20}/g) || [])];
+      if (ids.length === 0) return interaction.reply({ content: '❌ No se encontraron IDs válidos.', flags: 64 });
+      await interaction.deferReply({ flags: 64 });
+
+      let expulsados = 0, fallidos = 0;
+      const resultados = [];
+
+      for (const id of ids) {
+        try {
+          const member = await interaction.guild.members.fetch(id).catch(() => null);
+          if (!member) { fallidos++; resultados.push(`❌ \`${id}\` — no está en el servidor`); continue; }
+          if (member.roles.highest.position >= interaction.member.roles.highest.position) {
+            fallidos++; resultados.push(`⚠️ \`${id}\` — rol igual o superior`); continue;
+          }
+          await member.kick(`[Masskick] ${razon} | Por: ${interaction.user.tag}`);
+          expulsados++;
+          resultados.push(`✅ \`${id}\` (${member.user.tag})`);
+        } catch {
+          fallidos++;
+          resultados.push(`❌ \`${id}\``);
+        }
+        await new Promise(r => setTimeout(r, 500));
+      }
+
+      const { createCase } = require('../utils/createCase');
+      const caseId = createCase(interaction.guild.id, 'masskick', ids.join(','), interaction.user.id, razon);
+
+      const embed = new EmbedBuilder()
+        .setTitle('👢 Masskick Completado')
+        .setColor(0xFFA500)
+        .addFields(
+          { name: '✅ Expulsados', value: `${expulsados}`, inline: true },
+          { name: '❌ Fallidos', value: `${fallidos}`, inline: true },
+          { name: '📝 Razón', value: razon, inline: false },
+          { name: '🛡️ Moderador', value: `${interaction.user}`, inline: true },
+          { name: '📋 Caso', value: `#${caseId}`, inline: true }
+        )
+        .setDescription(resultados.slice(0, 20).join('\n') + (resultados.length > 20 ? `\n...y ${resultados.length - 20} más` : ''))
+        .setTimestamp();
+
+      await interaction.editReply({ embeds: [embed] });
+      await interaction.client.sendTypedLog(interaction.guild, 'kicks', embed);
+      return;
     }
   }
 };

@@ -160,6 +160,8 @@ module.exports = {
           { name: '/admin clear', desc: L('Limpiar mensajes del canal', 'Clear channel messages') },
           { name: '/admin lockdown', desc: L('Bloquear/desbloquear todos los canales del servidor', 'Lock/unlock all server channels') },
           { name: '/admin nuke', desc: L('Clonar y eliminar el canal (solo owner)', 'Clone and delete channel (owner only)') },
+          { name: '/admin massban', desc: L('Banear múltiples usuarios por ID', 'Ban multiple users by ID') },
+          { name: '/admin masskick', desc: L('Expulsar múltiples usuarios por ID', 'Kick multiple users by ID') },
           { name: '/admin dm', desc: L('Enviar DM a usuario(s)', 'Send DM to user(s)') },
           { name: '/admin purge', desc: L('Eliminar mensajes con una palabra clave', 'Delete messages containing a keyword') },
           { name: '/admin announce', desc: L('Enviar anuncio a un canal', 'Send announcement to a channel') },

@@ -29,7 +29,7 @@ module.exports = {
     // Defer inmediato para todos los subcomandos — evita timeout de 3s
     const ephemeralSubs = ['ipinfo', 'usercheck', 'leakcheck'];
     try {
-      await interaction.deferReply({ ephemeral: ephemeralSubs.includes(sub) });
+      await interaction.deferReply({ flags: ephemeralSubs.includes(sub) ? 64 : undefined });
     } catch (e) {
       console.error('[security] deferReply error:', e);
       return;
@@ -271,7 +271,7 @@ module.exports = {
     // ── USERCHECK ────────────────────────────────────────────────────────────
     if (sub === 'usercheck') {
       if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) return interaction.editReply({ content: '❌ Solo administradores.' });
-      const usuario = interaction.options.getUser('user');
+      const usuario = await interaction.options.getUser('user').fetch().catch(() => interaction.options.getUser('user'));
       const member = await interaction.guild.members.fetch(usuario.id).catch(() => null);
       const casesPath = path.join(__dirname, '../data/mod-cases.json');
       const warningsPath = path.join(__dirname, '../warnings.json');
@@ -282,28 +282,77 @@ module.exports = {
       const bans = guildCases.filter(c => c.type === 'ban' || c.type === 'tempban').length;
       const kicks = guildCases.filter(c => c.type === 'kick').length;
       const timeouts = guildCases.filter(c => c.type === 'timeout').length;
-      let riskScore = userWarnings.length * 5 + kicks * 15 + bans * 30 + timeouts * 10;
+      const softbans = guildCases.filter(c => c.type === 'softban').length;
+      const vcbans = guildCases.filter(c => c.type === 'vcban').length;
+
+      // Risk score
+      let riskScore = userWarnings.length * 5 + kicks * 15 + bans * 30 + timeouts * 10 + softbans * 20 + vcbans * 5;
       const accountAgeDays = Math.floor((Date.now() - usuario.createdTimestamp) / 86400000);
-      if (accountAgeDays < 7) riskScore += 25; else if (accountAgeDays < 30) riskScore += 10;
+      if (accountAgeDays < 3) riskScore += 40;
+      else if (accountAgeDays < 7) riskScore += 25;
+      else if (accountAgeDays < 30) riskScore += 10;
       if (!usuario.avatar) riskScore += 10;
       if (/free.*nitro|nitro.*free|discord.*gift/i.test(usuario.username)) riskScore += 30;
+      if (/admin|moderator|staff|official|support/i.test(usuario.username)) riskScore += 15;
+
+      // Discord flags/badges
+      const { UserFlags } = require('discord.js');
+      const flags = usuario.flags;
+      const badges = [];
+      if (flags) {
+        if (flags.has(UserFlags.Staff))                 badges.push('👑 Discord Staff');
+        if (flags.has(UserFlags.Partner))               badges.push('🤝 Partner');
+        if (flags.has(UserFlags.BugHunterLevel1))       badges.push('🐛 Bug Hunter');
+        if (flags.has(UserFlags.BugHunterLevel2))       badges.push('🐛 Bug Hunter Gold');
+        if (flags.has(UserFlags.ActiveDeveloper))       badges.push('👨‍💻 Active Developer');
+        if (flags.has(UserFlags.VerifiedDeveloper))     badges.push('✅ Verified Developer');
+        if (flags.has(UserFlags.PremiumEarlySupporter)) badges.push('⭐ Early Supporter');
+        if (flags.has(UserFlags.Quarantined))           { badges.push('🚫 Quarantined'); riskScore += 60; }
+        if (flags.has(UserFlags.Spammer))               { badges.push('🚨 Marked Spammer'); riskScore += 50; }
+      }
+      if (usuario.premiumType > 0) badges.push('💎 Nitro');
+      if (member?.premiumSince) badges.push('🚀 Server Booster');
+
       const riskLevel = riskScore >= 60 ? '🔴 ALTO' : riskScore >= 30 ? '🟡 MEDIO' : '🟢 BAJO';
       const color = riskScore >= 60 ? 0xED4245 : riskScore >= 30 ? 0xFFA500 : 0x57F287;
       const isBanned = await interaction.guild.bans.fetch(usuario.id).catch(() => null);
-      const embed = new EmbedBuilder().setTitle('🔍 Análisis de Seguridad').setDescription(`**${usuario.tag}** (${usuario.id})`).setThumbnail(usuario.displayAvatarURL()).setColor(color).addFields(
-        { name: '⚠️ Nivel de riesgo', value: `${riskLevel} (${riskScore} pts)`, inline: true },
-        { name: '📅 Cuenta', value: `${accountAgeDays} días`, inline: true },
-        { name: '🖼️ Avatar', value: usuario.avatar ? '✅' : '❌ Sin avatar', inline: true },
-        { name: '🔨 Baneado', value: isBanned ? '⚠️ Sí' : '✅ No', inline: true },
-        { name: '📊 Historial', value: `⚠️ Warns: **${userWarnings.length}** | 👢 Kicks: **${kicks}** | 🔨 Bans: **${bans}** | ⏱️ Timeouts: **${timeouts}**` }
-      ).setFooter({ text: 'Tronix Security' }).setTimestamp();
+
+      const embed = new EmbedBuilder()
+        .setTitle('🔍 Análisis de Seguridad')
+        .setDescription(`**${usuario.tag}** (${usuario.id})`)
+        .setThumbnail(usuario.displayAvatarURL({ size: 256 }))
+        .setColor(color)
+        .addFields(
+          { name: '⚠️ Nivel de riesgo', value: `${riskLevel} (${riskScore} pts)`, inline: true },
+          { name: '📅 Cuenta creada', value: `<t:${Math.floor(usuario.createdTimestamp / 1000)}:D> (${accountAgeDays}d)`, inline: true },
+          { name: '🖼️ Avatar', value: usuario.avatar ? '✅' : '❌ Sin avatar', inline: true },
+          { name: '🔨 Baneado aquí', value: isBanned ? '⚠️ Sí' : '✅ No', inline: true },
+          { name: '🏠 En servidor', value: member ? '✅ Sí' : '❌ No', inline: true },
+          { name: '🤖 Bot', value: usuario.bot ? '✅ Sí' : '❌ No', inline: true },
+          { name: '📊 Historial en este servidor', value: `⚠️ Warns: **${userWarnings.length}** | 👢 Kicks: **${kicks}** | 🔨 Bans: **${bans}** | ⏱️ Timeouts: **${timeouts}**${softbans > 0 ? ` | 🔄 Softbans: **${softbans}**` : ''}${vcbans > 0 ? ` | 🔇 VC Bans: **${vcbans}**` : ''}` }
+        )
+        .setFooter({ text: 'Tronix Security • User Check' })
+        .setTimestamp();
+
+      if (badges.length > 0) embed.addFields({ name: '🏅 Badges / Estado', value: badges.join('\n'), inline: false });
+
+      // Últimos 3 casos
+      if (guildCases.length > 0) {
+        const recent = guildCases.slice(-3).reverse();
+        const caseLines = recent.map(c => `**#${c.id}** \`${c.type}\` — ${c.reason || 'Sin razón'} <t:${Math.floor(c.timestamp / 1000)}:R>`).join('\n');
+        embed.addFields({ name: `📋 Últimos casos (${guildCases.length} total)`, value: caseLines });
+      }
+
+      // Alertas
       const alerts = [];
       if (accountAgeDays < 7) alerts.push('🚨 Cuenta nueva (<7 días)');
       if (!usuario.avatar) alerts.push('⚠️ Sin avatar');
       if (userWarnings.length >= 3) alerts.push(`⚠️ ${userWarnings.length} advertencias`);
-      if (bans > 0) alerts.push(`🔨 Baneado ${bans} vez/veces`);
-      if (/free.*nitro|nitro.*free/i.test(usuario.username)) alerts.push('🚨 Nombre sospechoso');
+      if (bans > 0) alerts.push(`🔨 Baneado ${bans} vez/veces en este servidor`);
+      if (/free.*nitro|nitro.*free/i.test(usuario.username)) alerts.push('🚨 Nombre sospechoso (Nitro scam)');
+      if (/admin|moderator|staff|official/i.test(usuario.username)) alerts.push('⚠️ Nombre que imita staff');
       if (alerts.length > 0) embed.addFields({ name: '🚨 Alertas', value: alerts.join('\n') });
+
       return interaction.editReply({ embeds: [embed] });
     }
 
