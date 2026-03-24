@@ -82,7 +82,7 @@ module.exports = {
       const miembro = await interaction.guild.members.fetch(usuario.id).catch(() => null);
 
       if (!miembro) return interaction.reply({ content: L('❌ Usuario no encontrado.', '❌ User not found.'), flags: 64 });
-      if (usuario.id === interaction.user.id) return interaction.reply({ content: '❌', flags: 64 });
+      if (usuario.id === interaction.user.id) return interaction.reply({ content: L('❌ No puedes aislarte a ti mismo.', '❌ You cannot jail yourself.'), flags: 64 });
       if (usuario.id === interaction.guild.ownerId) return interaction.reply({ content: L('❌ No puedes aislar al dueño.', '❌ Cannot jail the owner.'), flags: 64 });
       if (miembro.roles.highest.position >= interaction.member.roles.highest.position) {
         return interaction.reply({ content: L('❌ Rol igual o superior.', '❌ Equal or higher role.'), flags: 64 });

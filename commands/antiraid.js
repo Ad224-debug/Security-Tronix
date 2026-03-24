@@ -12,7 +12,7 @@ module.exports = {
   async execute(interaction) {
     try {
       if (!interaction.guild) return interaction.reply({ content: '❌ Solo en servidores.', flags: 64 });
-      await interaction.deferReply({ ephemeral: false });
+      await interaction.deferReply();
       const sub  = interaction.options.getSubcommand();
       const lang = interaction.client.getLanguage(interaction.guild.id);
       const L    = (es, en) => lang === 'es' ? es : en;

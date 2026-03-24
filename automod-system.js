@@ -101,7 +101,7 @@ async function checkAutomod(message) {
     try {
       await message.delete();
       
-      const lang = message.guild.preferredLocale?.startsWith('es') ? 'es' : 'en';
+      const lang = message.client.getLanguage ? message.client.getLanguage(message.guild.id) : (message.guild.preferredLocale?.startsWith('es') ? 'es' : 'en');
       
       const violationMessages = {
         nsfw: lang === 'es' ? '🔞 contenido NSFW/inapropiado' : '🔞 NSFW/inappropriate content',

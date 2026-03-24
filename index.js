@@ -1581,22 +1581,6 @@ client.on('messageCreate', async (message) => {
   if (!command) return;
 
   try {
-    // Para el comando AFK, pasar el mensaje completo
-    if (commandName === 'afk') {
-      const fakeInteraction = {
-        user: message.author,
-        member: message.member,
-        guild: message.guild,
-        channel: message.channel,
-        content: message.content,
-        reply: async (content) => {
-          return await message.reply(content);
-        },
-      };
-      await command.execute(fakeInteraction);
-      return;
-    }
-
     // Crear un objeto similar a interaction para compatibilidad
     const fakeInteraction = {
       user: message.author,
