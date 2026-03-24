@@ -242,13 +242,23 @@ module.exports = {
           const [
             userData, friendsData, followersData, followingData,
             badgesData, groupsData, gamesData,
-            avatarHeadData, avatarFullData, inventoryData, socialData
+            avatarHeadData, avatarFullData, inventoryData
           ] = await Promise.all([
             userRes.json(), friendsRes.json(), followersRes.json(), followingRes.json(),
             badgesRes.json(), groupsRes.json(), gamesRes.json(),
             avatarHeadRes.json(), avatarFullRes.json(),
-            inventoryRes.json(), socialRes.json().catch(() => ({}))
+            inventoryRes.json()
           ]);
+
+          // Social data — promotion-channels requires auth, try but don't fail
+          let socialData = {};
+          try {
+            const sd = await socialRes.json();
+            // Only use if it has actual data (not an error response)
+            if (!sd.errors && (sd.xboxUsername || sd.youtubeUsername || sd.twitterUsername || sd.twitchUsername)) {
+              socialData = sd;
+            }
+          } catch { /* skip */ }
 
           let isPremium = false;
           try {
@@ -271,14 +281,19 @@ module.exports = {
             const p = presData.userPresences?.[0];
             if (p) {
               presenceStatus = { type: p.userPresenceType, lastLocation: p.lastLocation };
-              // lastOnline comes from presence API when authenticated; fallback to userData
               if (p.lastOnline) lastOnline = new Date(p.lastOnline);
             }
           } catch { /* skip */ }
 
-          // Fallback: get lastOnline from user data endpoint (v1 includes lastOnline)
-          if (!lastOnline && userData.lastOnline) {
-            lastOnline = new Date(userData.lastOnline);
+          // Fallback: legacy API returns LastOnline without auth
+          if (!lastOnline) {
+            try {
+              const legacyRes = await fetch(`https://api.roblox.com/users/${userId}/onlinestatus`);
+              if (legacyRes.ok) {
+                const legacyData = await legacyRes.json();
+                if (legacyData.LastOnline) lastOnline = new Date(legacyData.LastOnline);
+              }
+            } catch { /* skip */ }
           }
 
           // Currently wearing

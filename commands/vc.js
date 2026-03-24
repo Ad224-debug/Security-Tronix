@@ -62,9 +62,9 @@ module.exports = {
       const usuario = interaction.options.getUser('user');
       const razon = interaction.options.getString('reason');
       const miembro = await interaction.guild.members.fetch(usuario.id).catch(() => null);
-      if (!miembro) return interaction.reply({ content: '❌ Usuario no encontrado.', ephemeral: true });
+      if (!miembro) return interaction.reply({ content: L('❌ Usuario no encontrado.', '❌ User not found.'), ephemeral: true });
       if (!miembro.voice.channel) return interaction.reply({ content: L('❌ El usuario no está en voz.', '❌ User is not in voice.'), ephemeral: true });
-      if (usuario.id === interaction.user.id || usuario.id === interaction.guild.ownerId) return interaction.reply({ content: '❌', ephemeral: true });
+      if (usuario.id === interaction.user.id || usuario.id === interaction.guild.ownerId) return interaction.reply({ content: L('❌ No puedes expulsar a ese usuario.', '❌ You cannot kick that user.'), ephemeral: true });
       if (miembro.roles.highest.position >= interaction.member.roles.highest.position) return interaction.reply({ content: L('❌ Rol igual o superior.', '❌ Equal or higher role.'), ephemeral: true });
       const voiceChannel = miembro.voice.channel;
       try { await usuario.send({ embeds: [new EmbedBuilder().setTitle(L('🔊 Expulsado de voz','🔊 Kicked from voice')).addFields({ name: L('Canal','Channel'), value: voiceChannel.name }, { name: L('Razón','Reason'), value: razon }).setColor(0xFEE75C).setTimestamp()] }); } catch {}
