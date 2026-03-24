@@ -106,8 +106,6 @@ module.exports = {
           { name: '/security ipinfo', desc: L('Información de una dirección IP', 'IP address information') },
           { name: '/security scanurl', desc: L('Analizar si una URL es maliciosa', 'Scan URL for malware') },
           { name: '/security usercheck', desc: L('Análisis de seguridad de un usuario', 'User security analysis') },
-          { name: '/security roblox', desc: L('Información de cuenta de Roblox', 'Roblox account information') },
-          { name: '/security roblox_avatar', desc: L('Avatar de cuenta de Roblox', 'Roblox account avatar') },
           { name: '/security leakcheck', desc: L('Buscar usuario/email en filtraciones de datos', 'Search user/email in data breaches') },
         ]
       },

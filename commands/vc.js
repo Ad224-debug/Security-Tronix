@@ -22,7 +22,12 @@ module.exports = {
     .addSubcommand(s => s.setName('ban').setDescription('Banea a un usuario de un canal de voz')
       .addUserOption(o => o.setName('user').setDescription('Usuario').setRequired(true))
       .addStringOption(o => o.setName('reason').setDescription('Razón').setRequired(true))
-      .addChannelOption(o => o.setName('channel').setDescription('Canal de voz (por defecto: canal del usuario)'))),
+      .addChannelOption(o => o.setName('channel').setDescription('Canal de voz (por defecto: canal del usuario)')))
+    .addSubcommand(s => s.setName('unban').setDescription('Desbanea a un usuario de un canal de voz')
+      .addUserOption(o => o.setName('user').setDescription('Usuario').setRequired(true))
+      .addChannelOption(o => o.setName('channel').setDescription('Canal de voz').setRequired(true)))
+    .addSubcommand(s => s.setName('banlist').setDescription('Ver lista de bans de voz de un canal')
+      .addChannelOption(o => o.setName('channel').setDescription('Canal de voz').setRequired(true))),
 
   async execute(interaction) {
     const sub = interaction.options.getSubcommand();
@@ -122,6 +127,53 @@ module.exports = {
       await interaction.reply({ embeds: [embed] });
       await interaction.client.sendTypedLog(interaction.guild, 'bans', embed);
       return;
+    }
+
+    // ── UNBAN ────────────────────────────────────────────────────────────────
+    if (sub === 'unban') {
+      if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) return interaction.reply({ content: L('❌ Solo administradores.', '❌ Administrators only.'), ephemeral: true });
+      const usuario = interaction.options.getUser('user');
+      const channel = interaction.options.getChannel('channel');
+      if (channel.type !== 2) return interaction.reply({ content: L('❌ Canal de voz inválido.', '❌ Invalid voice channel.'), ephemeral: true });
+      const vcBansPath = path.join(__dirname, '../data/voice-bans.json');
+      let vcBans = fs.existsSync(vcBansPath) ? JSON.parse(fs.readFileSync(vcBansPath, 'utf8')) : {};
+      const key = `${interaction.guild.id}-${channel.id}`;
+      if (!vcBans[key]?.includes(usuario.id)) return interaction.reply({ content: L('❌ Este usuario no está baneado de ese canal.', '❌ User is not banned from that channel.'), ephemeral: true });
+      vcBans[key] = vcBans[key].filter(id => id !== usuario.id);
+      fs.writeFileSync(vcBansPath, JSON.stringify(vcBans, null, 2));
+      // Remove permission override
+      try { await channel.permissionOverwrites.delete(usuario.id); } catch {}
+      const embed = new EmbedBuilder()
+        .setTitle(L('🔊 Usuario Desbaneado de Voz', '🔊 User Voice Unbanned'))
+        .addFields(
+          { name: L('Usuario', 'User'), value: `${usuario} (${usuario.id})`, inline: true },
+          { name: L('Canal', 'Channel'), value: channel.name, inline: true },
+          { name: L('Moderador', 'Moderator'), value: `${interaction.user}`, inline: true }
+        )
+        .setColor(0x57F287).setTimestamp();
+      await interaction.reply({ embeds: [embed] });
+      await interaction.client.sendTypedLog(interaction.guild, 'bans', embed);
+      return;
+    }
+
+    // ── BANLIST ──────────────────────────────────────────────────────────────
+    if (sub === 'banlist') {
+      if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) return interaction.reply({ content: L('❌ Solo administradores.', '❌ Administrators only.'), ephemeral: true });
+      const channel = interaction.options.getChannel('channel');
+      if (channel.type !== 2) return interaction.reply({ content: L('❌ Canal de voz inválido.', '❌ Invalid voice channel.'), ephemeral: true });
+      const vcBansPath = path.join(__dirname, '../data/voice-bans.json');
+      const vcBans = fs.existsSync(vcBansPath) ? JSON.parse(fs.readFileSync(vcBansPath, 'utf8')) : {};
+      const key = `${interaction.guild.id}-${channel.id}`;
+      const banned = vcBans[key] || [];
+      const embed = new EmbedBuilder()
+        .setTitle(L(`🔇 Bans de voz — ${channel.name}`, `🔇 Voice bans — ${channel.name}`))
+        .setColor(0xED4245)
+        .setDescription(banned.length
+          ? banned.map((id, i) => `**${i + 1}.** <@${id}> (${id})`).join('\n')
+          : L('✅ Sin bans en este canal.', '✅ No bans in this channel.'))
+        .setFooter({ text: `${banned.length} ban(s)` })
+        .setTimestamp();
+      return interaction.reply({ embeds: [embed], ephemeral: true });
     }
   }
 };
