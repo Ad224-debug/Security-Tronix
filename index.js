@@ -190,61 +190,16 @@ for (const file of commandFiles) {
     if (command.setupMessageTracking) {
       command.setupMessageTracking(client);
     }
-    
-    // Inicializar sistema AFK si existe
-    if (command.setupAFKSystem) {
-      command.setupAFKSystem(client);
-    }
   } catch (err) {
     console.error(`[ERROR] Fallo al cargar comando ${file}:`, err.message);
   }
 }
 
-// Inicializar sistema de eventos
-const EventManager = require('./events/managers/EventManager');
-const RSVPManager = require('./events/managers/RSVPManager');
-const RoleManager = require('./events/managers/RoleManager');
-const ReminderScheduler = require('./events/managers/ReminderScheduler');
-const StatisticsTracker = require('./events/managers/StatisticsTracker');
-const { updateEventEmbed } = require('./events/utils/embedBuilder');
 const cron = require('node-cron');
-
-let eventManager, rsvpManager, roleManager, reminderScheduler, statsTracker;
 
 client.once('clientReady', () => {
   console.log(`✅ Bot conectado como ${client.user.tag}`);
-  
-  // Inicializar managers de eventos
-  try {
-    eventManager = new EventManager();
-    rsvpManager = new RSVPManager(eventManager);
-    roleManager = new RoleManager(client);
-    reminderScheduler = new ReminderScheduler(client, eventManager);
-    statsTracker = new StatisticsTracker(eventManager);
-
-    // Exponer managers en el cliente para que los comandos los reutilicen
-    client.eventManager = eventManager;
-    client.rsvpManager = rsvpManager;
-    client.roleManager = roleManager;
-    client.reminderScheduler = reminderScheduler;
-    client.statsTracker = statsTracker;
-
-    // Record attendance stats when an event completes
-    eventManager.onEventCompleted = (event) => {
-      try {
-        statsTracker.recordAttendance(event);
-      } catch (err) {
-        console.error('Error recording attendance stats:', err);
-      }
-    };
-
-    console.log('✅ Event system initialized');
-    
-    // Configurar cron jobs
-    setupCronJobs();
-  } catch (error) {
-    console.error('Error initializing event system:', error);
-  }
+  setupCronJobs();
 });
 
 function setupCronJobs() {
@@ -269,10 +224,7 @@ function setupCronJobs() {
     return job;
   }
 
-  // Verificar y enviar recordatorios cada 5 minutos
-  scheduleSafe('reminders', '*/5 * * * *', async () => {
-    await reminderScheduler.checkAndSendReminders();
-  });
+  // Verificar y enviar recordatorios cada 5 minutos — eliminado (sistema de eventos movido)
 
   // ── Tempban persistente: revisar cada 5 minutos ───────────────────────────
   // Desbanea usuarios cuyo tempban expiró (sobrevive reinicios del bot)
@@ -314,21 +266,8 @@ function setupCronJobs() {
     if (changed) fs.writeFileSync(casesPath, JSON.stringify(cases, null, 2));
   });
 
-  // Actualizar estados de eventos cada 10 minutos
-  scheduleSafe('statusUpdate', '*/10 * * * *', async () => {
-    eventManager.checkAndUpdateEventStatuses();
-  });
-
-  // Generar eventos recurrentes diariamente a medianoche
-  scheduleSafe('recurringEvents', '0 0 * * *', async () => {
-    await eventManager.generateRecurringEvents();
-  });
-
   // Limpieza diaria a las 2 AM
   scheduleSafe('cleanup', '0 2 * * *', async () => {
-    reminderScheduler.cleanupOldReminders();
-    statsTracker.cleanupOldStats();
-    eventManager.cleanupOldEvents();
     console.log('✅ Daily cleanup completed');
   });
 
@@ -360,14 +299,11 @@ function setupCronJobs() {
     }
   });
 
-  // Graceful shutdown: guardar datos al cerrar
+  // Graceful shutdown
   const shutdown = async (signal) => {
     console.log(`\n🛑 Received ${signal}, shutting down gracefully...`);
     try {
-      // Detener todos los cron jobs
       Object.values(cronJobs).forEach(job => job.stop());
-      // Guardar estado de eventos
-      if (eventManager) eventManager.saveEvents();
       console.log('✅ Data saved. Goodbye!');
     } catch (err) {
       console.error('Error during shutdown:', err);
@@ -398,32 +334,6 @@ client.on('messageCreate', async (message) => {
   if (message.author?.bot) return;
   if (message.type !== 0 && message.type !== 19) return; // Solo mensajes normales y replies
 
-  // Sistema AFK - detectar si el usuario que escribe está AFK
-  if (global.afkUsers && global.afkUsers.has(message.author.id)) {
-    const afkData = global.afkUsers.get(message.author.id);
-    if (afkData.guildId === message.guild.id) {
-      global.afkUsers.delete(message.author.id);
-      try {
-        const member = message.guild.members.cache.get(message.author.id);
-        if (member?.nickname?.startsWith('[AFK] ')) {
-          await member.setNickname(member.nickname.replace('[AFK] ', '')).catch(() => {});
-        }
-      } catch {}
-      await message.reply({ embeds: [new EmbedBuilder().setTitle('👋 Bienvenido de vuelta').setDescription(`${message.author} ya no está AFK`).setColor(0x57F287).setTimestamp()], allowedMentions: { repliedUser: false } }).catch(() => {});
-    }
-  }
-
-  // Sistema AFK - notificar si mencionan a alguien AFK
-  if (global.afkUsers && message.mentions.users.size > 0) {
-    for (const [, user] of message.mentions.users) {
-      if (global.afkUsers.has(user.id)) {
-        const afkData = global.afkUsers.get(user.id);
-        const timeAFK = Math.round((Date.now() - afkData.timestamp) / 60000);
-        await message.reply({ embeds: [new EmbedBuilder().setTitle('💤 Usuario AFK').setDescription(`**${user.username}** está ausente`).addFields({ name: '⏰ Tiempo AFK', value: `${timeAFK} min`, inline: true }, { name: '📝 Razón', value: afkData.reason, inline: false }).setColor(0xFEE75C).setTimestamp()], allowedMentions: { repliedUser: false } }).catch(() => {});
-      }
-    }
-  }
-
   // Capturar mensajes para logs activos
   if (global.activeLogs) {
     const key = `${message.guild.id}-${message.author.id}`;
@@ -442,20 +352,6 @@ client.on('messageCreate', async (message) => {
 
   // Ejecutar sistemas de seguridad adicionales (anti-spam, phishing)
   await runSecurityChecks(message, sendLog);
-
-  // ── Auto-respuestas (triggers) ────────────────────────────────────────────
-  try {
-    const triggerCmd = client.commands.get('trigger');
-    if (triggerCmd) {
-      const match = triggerCmd.findTrigger(message.guild.id, message.content);
-      if (match) {
-        const response = triggerCmd.buildTriggerResponse(match);
-        await message.reply({ ...response, allowedMentions: { repliedUser: false } });
-      }
-    }
-  } catch (err) {
-    console.error('[trigger] Error:', err);
-  }
 
   // Guardar información del mensaje en cache
   messageCache.set(message.id, {
@@ -1526,112 +1422,6 @@ client.on('channelPinsUpdate', async (channel, time) => {
 
 // Manejar comandos slash
 client.on('interactionCreate', async (interaction) => {
-  // Manejar botones de RSVP
-  if (interaction.isButton() && interaction.customId.startsWith('event_rsvp_')) {
-    try {
-      // Format: event_rsvp_<eventId>_<status>
-      // eventId is a UUID (uses hyphens, not underscores), status can be "attending", "maybe", "not_attending"
-      const withoutPrefix = interaction.customId.slice('event_rsvp_'.length); // "<eventId>_<status>"
-      // UUID is 36 chars (8-4-4-4-12)
-      const eventId = withoutPrefix.slice(0, 36);
-      const status = withoutPrefix.slice(37); // skip the underscore after UUID
-
-      if (!eventManager || !rsvpManager || !roleManager) {
-        return await interaction.reply({
-          content: '❌ El sistema de eventos no está inicializado',
-          flags: 64
-        });
-      }
-
-      const event = eventManager.getEvent(eventId);
-      if (!event) {
-        return await interaction.reply({
-          content: '❌ Este evento ya no existe',
-          flags: 64
-        });
-      }
-
-      // Procesar RSVP
-      const result = rsvpManager.handleRSVP(eventId, interaction.user.id, status, {
-        username: interaction.user.username
-      });
-
-      // Asignar o remover rol si es necesario
-      if (event.roleId) {
-        if (result.needsRoleAssignment) {
-          await roleManager.assignEventRole(interaction.guild, interaction.user.id, event.roleId);
-        } else if (status === 'not_attending') {
-          await roleManager.removeEventRole(interaction.guild, interaction.user.id, event.roleId);
-        }
-      }
-
-      // Actualizar embed
-      await updateEventEmbed(client, eventManager.getEvent(eventId));
-
-      // Responder al usuario
-      const lang = client.getLanguage(interaction.guild.id);
-      let message;
-
-      if (status === 'attending') {
-        if (result.status === 'waitlist') {
-          message = lang === 'en' 
-            ? `⏳ Event is full. You've been added to the waitlist (position ${result.waitlistPosition})`
-            : `⏳ El evento está lleno. Has sido agregado a la lista de espera (posición ${result.waitlistPosition})`;
-        } else {
-          message = lang === 'en'
-            ? '✅ You confirmed attendance for this event!'
-            : '✅ ¡Has confirmado tu asistencia a este evento!';
-        }
-      } else if (status === 'maybe') {
-        message = lang === 'en'
-          ? '❓ You marked yourself as "maybe" for this event'
-          : '❓ Te has marcado como "tal vez" para este evento';
-      } else {
-        message = lang === 'en'
-          ? '❌ You cancelled your attendance'
-          : '❌ Has cancelado tu asistencia';
-      }
-
-      await interaction.reply({
-        content: message,
-        flags: 64
-      });
-
-      // Si alguien fue promovido del waitlist (ya lo hace handleRSVP internamente),
-      // notificarle y asignarle el rol
-      if (status === 'not_attending' && result.promoted) {
-        try {
-          const user = await client.users.fetch(result.promoted.userId);
-          const notifMsg = lang === 'en'
-            ? `🎉 Great news! A spot opened up for **${event.title}**. You've been moved from the waitlist to confirmed attendees!`
-            : `🎉 ¡Buenas noticias! Se liberó un lugar para **${event.title}**. ¡Has sido movido de la lista de espera a confirmados!`;
-          
-          await user.send(notifMsg).catch(() => {}); // DM puede estar desactivado
-          
-          // Asignar rol al promovido
-          if (event.roleId) {
-            await roleManager.assignEventRole(interaction.guild, result.promoted.userId, event.roleId).catch(err => {
-              console.error('Error assigning role to promoted user:', err);
-            });
-          }
-          
-          // Actualizar embed con el nuevo estado
-          await updateEventEmbed(client, eventManager.getEvent(eventId));
-        } catch (error) {
-          console.error('Error notifying promoted user:', error);
-        }
-      }
-
-    } catch (error) {
-      console.error('Error handling RSVP:', error);
-      await interaction.reply({
-        content: `❌ ${error.message}`,
-        flags: 64
-      });
-    }
-    return;
-  }
-
   // Manejar botones de reportes
   if (interaction.isButton() && interaction.customId?.startsWith('report_action_')) {
     try {
@@ -1699,17 +1489,6 @@ client.on('interactionCreate', async (interaction) => {
     return;
   }
 
-  // Manejar botones y modals de triggers
-  if ((interaction.isButton() || interaction.isModalSubmit()) && interaction.customId?.startsWith('trigger_')) {
-    try {
-      const triggerCmd = client.commands.get('trigger');
-      if (triggerCmd?.handleInteraction) await triggerCmd.handleInteraction(interaction);
-    } catch (e) {
-      console.error('Error en trigger interaction:', e);
-    }
-    return;
-  }
-
   // Manejar botones y modals de automod
   if ((interaction.isButton() || interaction.isModalSubmit()) && interaction.customId?.startsWith('am_')) {
     try {
@@ -1728,17 +1507,6 @@ client.on('interactionCreate', async (interaction) => {
       if (logsCmd?.handleInteraction) await logsCmd.handleInteraction(interaction);
     } catch (e) {
       console.error('Error en logs interaction:', e);
-    }
-    return;
-  }
-
-  // Manejar botones de /fun (hug, kiss, slap)
-  if (interaction.isButton() && interaction.customId?.startsWith('fun_')) {
-    try {
-      const funCmd = client.commands.get('fun');
-      if (funCmd?.handleButton) await funCmd.handleButton(interaction);
-    } catch (e) {
-      console.error('Error en fun button:', e);
     }
     return;
   }

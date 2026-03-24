@@ -13,11 +13,8 @@ module.exports = {
           { name: '⚙️ Configuración', value: 'config' },
           { name: '📊 Información', value: 'info' },
           { name: '🔒 Seguridad', value: 'security' },
-          { name: '🎉 Diversión', value: 'fun' },
           { name: '🎤 Voz', value: 'voice' },
-          { name: '📅 Eventos', value: 'events' },
-          { name: '🤖 Admin/Bot', value: 'bot' },
-          { name: '🟥 Roblox', value: 'roblox' }
+          { name: '🤖 Admin/Bot', value: 'bot' }
         )),
 
   async execute(interaction) {
@@ -76,8 +73,6 @@ module.exports = {
           { name: '/config joincheck', desc: L('Canal de análisis de reputación al unirse', 'Join reputation check channel') },
           { name: '/config antiraid', desc: L('Configurar sistema anti-raid', 'Configure anti-raid system') },
           { name: '/automod', desc: L('Panel de auto-moderación', 'Auto-moderation panel') },
-          { name: '/trigger', desc: L('Panel de auto-respuestas (triggers)', 'Auto-response triggers panel') },
-          { name: '/suggestion setup', desc: L('Configurar canal de sugerencias', 'Configure suggestion channel') },
         ]
       },
       info: {
@@ -93,8 +88,6 @@ module.exports = {
           { name: '/info ping', desc: L('Latencia del bot', 'Bot latency') },
           { name: '/avatar', desc: L('Ver avatar de un usuario', 'View user avatar') },
           { name: '/messageview', desc: L('Ver historial de mensajes de un usuario', 'View user message history') },
-          { name: '/suggestion list', desc: L('Listar sugerencias pendientes', 'List pending suggestions') },
-          { name: '/suggestion view', desc: L('Ver detalles de una sugerencia', 'View suggestion details') },
         ]
       },
       security: {
@@ -113,17 +106,8 @@ module.exports = {
         title: L('🎉 Diversión', '🎉 Fun'),
         color: 0xFEE75C,
         commands: [
-          { name: '/fun hug', desc: L('Abrazar a alguien', 'Hug someone') },
-          { name: '/fun kiss', desc: L('Besar a alguien', 'Kiss someone') },
-          { name: '/fun pat', desc: L('Acariciar a alguien', 'Pat someone') },
-          { name: '/fun slap', desc: L('Abofetear a alguien', 'Slap someone') },
-          { name: '/fun dance', desc: L('Bailar', 'Dance') },
-          { name: '/fun cry', desc: L('Llorar', 'Cry') },
-          { name: '/fun poll', desc: L('Crear encuesta', 'Create poll') },
-          { name: '/fun afk', desc: L('Establecer estado AFK', 'Set AFK status') },
           { name: '/say', desc: L('Hacer que el bot envíe un mensaje', 'Make the bot send a message') },
           { name: '/embed', desc: L('Crear embed personalizado', 'Create custom embed') },
-          { name: '/suggestion submit', desc: L('Enviar sugerencia al servidor', 'Submit a suggestion') },
         ]
       },
       voice: {
@@ -168,17 +152,6 @@ module.exports = {
           { name: '/admin backup', desc: L('Crear/listar/restaurar/eliminar backups', 'Create/list/restore/delete backups') },
           { name: '/setbotname', desc: L('Cambiar apodo del bot en el servidor', 'Change bot nickname in the server') },
           { name: '/setbotavatar', desc: L('Cambiar avatar del bot', 'Change bot avatar') },
-          { name: '/suggestion approve', desc: L('Aprobar sugerencia', 'Approve suggestion') },
-          { name: '/suggestion deny', desc: L('Rechazar sugerencia', 'Deny suggestion') },
-        ]
-      },
-      roblox: {
-        title: '🟥 Roblox',
-        color: 0xFF0000,
-        commands: [
-          { name: '/roblox user', desc: L('Perfil completo con avatar, grupos, juegos, RAP, badges y presencia', 'Full profile with avatar, groups, games, RAP, badges and presence') },
-          { name: '/roblox game', desc: L('Info de un juego por nombre o ID (visitas, jugadores, creador)', 'Game info by name or ID (visits, players, creator)') },
-          { name: '/roblox group', desc: L('Info de un grupo por nombre o ID (miembros, dueño, tipo)', 'Group info by name or ID (members, owner, type)') },
         ]
       },
     };
@@ -208,11 +181,8 @@ module.exports = {
         { name: '⚙️ Configuración', value: `${commands.config.commands.length} cmds`, inline: true },
         { name: '📊 Información', value: `${commands.info.commands.length} cmds`, inline: true },
         { name: '🔒 Seguridad', value: `${commands.security.commands.length} cmds`, inline: true },
-        { name: '🎉 Diversión', value: `${commands.fun.commands.length} cmds`, inline: true },
         { name: '🎤 Voz', value: `${commands.voice.commands.length} cmds`, inline: true },
-        { name: '📅 Eventos', value: `${commands.events.commands.length} cmds`, inline: true },
         { name: '🤖 Admin/Bot', value: `${commands.bot.commands.length} cmds`, inline: true },
-        { name: '🟥 Roblox', value: `${commands.roblox.commands.length} cmds`, inline: true },
       )
       .setThumbnail(interaction.client.user.displayAvatarURL())
       .setFooter({ text: L('Usa /help category:<categoría> para ver comandos específicos', 'Use /help category:<category> to see specific commands') })
