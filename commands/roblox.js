@@ -24,7 +24,7 @@ function fmt(n) {
 // Build the User Profile embed (Avi-style)
 function buildProfileEmbed(d) {
   const { userId, userData, friendsData, followersData, followingData,
-          badgesData, inventoryData, isPremium, presenceStatus, lastOnline } = d;
+          badgesData, inventoryData, socialData, isPremium, presenceStatus, lastOnline } = d;
 
   const createdAt = new Date(userData.created);
   const isBanned = userData.isBanned;
@@ -49,17 +49,37 @@ function buildProfileEmbed(d) {
   const presGame  = presenceStatus?.lastLocation && presenceStatus?.type === 2
     ? ` • ${presenceStatus.lastLocation}` : '';
 
+  // Social connections (Xbox, YouTube, Twitter, Twitch)
+  const socialLines = [];
+  if (socialData?.xboxUsername)   socialLines.push(`<:xbox:1> Xbox: **${socialData.xboxUsername}**`);
+  if (socialData?.youtubeUsername) socialLines.push(`▶️ YouTube: **${socialData.youtubeUsername}**`);
+  if (socialData?.twitterUsername) socialLines.push(`🐦 Twitter: **${socialData.twitterUsername}**`);
+  if (socialData?.twitchUsername)  socialLines.push(`🟣 Twitch: **${socialData.twitchUsername}**`);
+
+  // Language from locale
+  const locale = userData.locale || null;
+  const localeNames = {
+    'en_us': 'English (US)', 'es_es': 'Spanish (Spain)', 'es_mx': 'Spanish (Mexico)',
+    'pt_br': 'Portuguese (Brazil)', 'fr_fr': 'French', 'de_de': 'German',
+    'it_it': 'Italian', 'ja_jp': 'Japanese', 'ko_kr': 'Korean',
+    'zh_cn': 'Chinese (Simplified)', 'zh_tw': 'Chinese (Traditional)',
+    'ru_ru': 'Russian', 'pl_pl': 'Polish', 'tr_tr': 'Turkish'
+  };
+  const langLabel = locale ? (localeNames[locale.toLowerCase()] || locale) : null;
+  if (langLabel) socialLines.push(`🌐 Language: **${langLabel}** (${locale})`);
+
+  const descLines = [`**${friends} Friends | ${followers} Followers | ${following} Following**`];
+  if (isPremium) descLines.push('💎 Roblox Premium');
+  if (isBanned)  descLines.push('🚫 **Account Banned**');
+  if (socialLines.length) descLines.push('', ...socialLines);
+
   const embed = new EmbedBuilder()
     .setColor(isBanned ? 0xFF0000 : isPremium ? 0xF5A623 : 0x5865F2)
     .setAuthor({
       name: `${userData.displayName} (@${userData.name})`,
       url: `https://www.roblox.com/users/${userId}/profile`
     })
-    .setDescription(
-      `**${friends} Friends | ${followers} Followers | ${following} Following**` +
-      (isPremium ? '\n💎 Roblox Premium' : '') +
-      (isBanned ? '\n🚫 **Account Banned**' : '')
-    )
+    .setDescription(descLines.join('\n'))
     .addFields(
       { name: 'ID',        value: `${userId}`,                                                    inline: true },
       { name: 'Verified',  value: 'N/A',                                                          inline: true },
@@ -205,7 +225,7 @@ module.exports = {
           const [
             userRes, friendsRes, followersRes, followingRes,
             badgesRes, groupsRes, gamesRes, premiumRes,
-            avatarHeadRes, avatarFullRes, inventoryRes
+            avatarHeadRes, avatarFullRes, inventoryRes, socialRes
           ] = await Promise.all([
             fetch(`https://users.roblox.com/v1/users/${userId}`),
             fetch(`https://friends.roblox.com/v1/users/${userId}/friends/count`),
@@ -217,18 +237,19 @@ module.exports = {
             fetch(`https://premiumfeatures.roblox.com/v1/users/${userId}/validate-membership`),
             fetch(`https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${userId}&size=150x150&format=Png`),
             fetch(`https://thumbnails.roblox.com/v1/users/avatar?userIds=${userId}&size=720x720&format=Png`),
-            fetch(`https://inventory.roblox.com/v1/users/${userId}/assets/collectibles?limit=100&sortOrder=Desc`)
+            fetch(`https://inventory.roblox.com/v1/users/${userId}/assets/collectibles?limit=100&sortOrder=Desc`),
+            fetch(`https://accountinformation.roblox.com/v1/users/${userId}/promotion-channels`)
           ]);
 
           const [
             userData, friendsData, followersData, followingData,
             badgesData, groupsData, gamesData,
-            avatarHeadData, avatarFullData, inventoryData
+            avatarHeadData, avatarFullData, inventoryData, socialData
           ] = await Promise.all([
             userRes.json(), friendsRes.json(), followersRes.json(), followingRes.json(),
             badgesRes.json(), groupsRes.json(), gamesRes.json(),
             avatarHeadRes.json(), avatarFullRes.json(),
-            inventoryRes.json()
+            inventoryRes.json(), socialRes.json().catch(() => ({}))
           ]);
 
           let isPremium = false;
@@ -277,7 +298,7 @@ module.exports = {
           d = {
             userId,
             userData, friendsData, followersData, followingData,
-            badgesData, groupsData, gamesData, inventoryData,
+            badgesData, groupsData, gamesData, inventoryData, socialData,
             avatarUrl: avatarHeadData.data?.[0]?.imageUrl || null,
             fullAvatarUrl: avatarFullData.data?.[0]?.imageUrl || null,
             isPremium, presenceStatus, lastOnline, wearingData
