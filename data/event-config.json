@@ -1,0 +1,27 @@
+{
+  "reminders": {
+    "enabled": true,
+    "intervals": [
+      { "hours": 24, "label": "24h" },
+      { "hours": 1, "label": "1h" },
+      { "hours": 0, "label": "start" }
+    ]
+  },
+  "limits": {
+    "maxEventsPerGuild": 50,
+    "maxEventsPerUserPerDay": 5,
+    "maxAttendeesPerEvent": 500,
+    "maxRecurringTemplatesPerGuild": 10,
+    "maxRSVPChangesPerEvent": 10
+  },
+  "cleanup": {
+    "completedEventsRetentionDays": 30,
+    "cancelledEventsRetentionDays": 7,
+    "statisticsRetentionDays": 90,
+    "sentRemindersRetentionDays": 7
+  },
+  "rateLimit": {
+    "rsvpCooldownSeconds": 3,
+    "abuseBlockMinutes": 5
+  }
+}

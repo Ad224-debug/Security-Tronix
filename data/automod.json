@@ -1,0 +1,26 @@
+{
+  "1468483206344081563": {
+    "spam": {
+      "enabled": false,
+      "messages": 5,
+      "seconds": 5
+    },
+    "mentions": {
+      "enabled": false,
+      "maxMentions": 5
+    },
+    "links": {
+      "enabled": false
+    },
+    "invites": {
+      "enabled": false
+    },
+    "caps": {
+      "enabled": true,
+      "percentage": 70
+    },
+    "nsfw": {
+      "enabled": true
+    }
+  }
+}

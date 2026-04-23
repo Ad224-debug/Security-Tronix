@@ -1,0 +1,32 @@
+{
+  "events": {
+    "733124cd-e781-41ba-a669-eb94542fc691": {
+      "id": "733124cd-e781-41ba-a669-eb94542fc691",
+      "title": "ADA",
+      "description": null,
+      "startTime": 1775347200000,
+      "endTime": null,
+      "location": null,
+      "maxAttendees": null,
+      "imageUrl": null,
+      "guildId": "1468483206344081563",
+      "channelId": "1468684103233700085",
+      "creatorId": "1344280052355043369",
+      "creatorUsername": "huevo_oncio",
+      "status": "cancelled",
+      "attendees": [
+        {
+          "userId": "1344280052355043369",
+          "username": "huevo_oncio",
+          "status": "attending",
+          "timestamp": 1772632310632,
+          "rsvpChanges": 1
+        }
+      ],
+      "createdAt": 1772632307659,
+      "updatedAt": 1772632323342,
+      "messageId": "1478751821722812456"
+    }
+  },
+  "recurrenceTemplates": {}
+}

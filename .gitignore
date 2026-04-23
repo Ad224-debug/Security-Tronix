@@ -1,9 +1,6 @@
 node_modules/
 .env
-config.json
-warnings.json
-warn-config.json
-data/
+data/cache.db
 *.log
 .DS_Store
 .vscode/
