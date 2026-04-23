@@ -155,8 +155,8 @@ async function sendLog(guild, embed, isDeleteLog = false) {
 // Tipos: kicks, bans, warnings, timeouts, automod, messages, voice, members, server, invites
 async function sendTypedLog(guild, type, embed) {
   const modLogs = guildConfig.get(guild.id, 'modLogs') || {};
-  // Buscar canal específico para el tipo, luego fallback al canal genérico
   const channelId = modLogs[type] || getLogChannel(guild.id);
+  console.log(`[sendTypedLog] type=${type} guildId=${guild.id} channelId=${channelId} modLogs=${JSON.stringify(modLogs)}`);
   if (!channelId) return;
   try {
     const ch = await guild.channels.fetch(channelId);
@@ -782,28 +782,63 @@ client.on('guildMemberAdd', async (member) => {
   }
 });
 
-// Log: Miembro se va + guardar roles para Role Restore
+// Log: Miembro se va + guardar roles para Role Restore + detectar kicks
 client.on('guildMemberRemove', async (member) => {
-  const embed = new EmbedBuilder()
-    .setTitle('📤 Miembro Salió')
-    .setColor(0xFF0000)
-    .setThumbnail(member.user.displayAvatarURL())
-    .addFields(
-      { name: 'Usuario', value: `${member.user.tag}`, inline: true },
-      { name: 'ID', value: member.user.id, inline: true },
-      { name: 'Se Unió', value: member.joinedAt ? `<t:${Math.floor(member.joinedTimestamp / 1000)}:R>` : 'Desconocido', inline: false },
-      { name: 'Miembros Totales', value: `${member.guild.memberCount}`, inline: true }
-    )
-    .setTimestamp();
+  // Esperar un poco para que el audit log se actualice
+  await new Promise(r => setTimeout(r, 1000));
 
-  await sendTypedLog(member.guild, 'members', embed);
+  // Detectar si fue un kick via audit log
+  let wasKicked = false;
+  let kickModerator = null;
+  let kickReason = 'No especificada';
+  try {
+    const auditLogs = await member.guild.fetchAuditLogs({ limit: 1, type: 20 }); // MEMBER_KICK
+    const entry = auditLogs.entries.first();
+    if (entry && entry.target.id === member.id && Date.now() - entry.createdTimestamp < 5000) {
+      wasKicked = true;
+      kickModerator = entry.executor;
+      kickReason = entry.reason || 'No especificada';
+    }
+  } catch {}
+
+  if (wasKicked) {
+    // Log de kick
+    const kickEmbed = new EmbedBuilder()
+      .setTitle('👢 Usuario Expulsado (Kick)')
+      .setColor(0xFEE75C)
+      .setThumbnail(member.user.displayAvatarURL())
+      .addFields(
+        { name: '👤 Usuario', value: `${member.user.tag} (<@${member.id}>)`, inline: true },
+        { name: '🆔 ID', value: member.id, inline: true },
+        { name: '🛡️ Moderador', value: kickModerator ? `${kickModerator.tag} (<@${kickModerator.id}>)` : 'Desconocido', inline: true },
+        { name: '📝 Razón', value: kickReason, inline: false },
+        { name: '📅 Cuenta creada', value: `<t:${Math.floor(member.user.createdTimestamp / 1000)}:R>`, inline: true },
+        { name: '📥 Se unió', value: member.joinedAt ? `<t:${Math.floor(member.joinedTimestamp / 1000)}:R>` : 'Desconocido', inline: true }
+      )
+      .setFooter({ text: `Kick detectado via Audit Log` })
+      .setTimestamp();
+    await sendTypedLog(member.guild, 'kicks', kickEmbed);
+  } else {
+    // Log normal de salida
+    const embed = new EmbedBuilder()
+      .setTitle('📤 Miembro Salió')
+      .setColor(0xFF6B6B)
+      .setThumbnail(member.user.displayAvatarURL())
+      .addFields(
+        { name: '👤 Usuario', value: `${member.user.tag} (<@${member.id}>)`, inline: true },
+        { name: '🆔 ID', value: member.id, inline: true },
+        { name: '📥 Se unió', value: member.joinedAt ? `<t:${Math.floor(member.joinedTimestamp / 1000)}:R>` : 'Desconocido', inline: true },
+        { name: '👥 Miembros totales', value: `${member.guild.memberCount}`, inline: true }
+      )
+      .setTimestamp();
+    await sendTypedLog(member.guild, 'members', embed);
+  }
 
   // ── Role Restore: guardar roles al salir ──────────────────────────────────
   try {
     const roleIds = member.roles.cache
-      .filter(r => r.id !== member.guild.id) // excluir @everyone
+      .filter(r => r.id !== member.guild.id)
       .map(r => r.id);
-
     if (roleIds.length > 0) {
       const stored = guildConfig.get(member.guild.id, 'roleRestore') || {};
       stored[member.id] = { roles: roleIds, leftAt: Date.now(), tag: member.user.tag };
@@ -816,32 +851,54 @@ client.on('guildMemberRemove', async (member) => {
 
 // Log: Usuario baneado
 client.on('guildBanAdd', async (ban) => {
+  await new Promise(r => setTimeout(r, 1000));
+  let moderator = null, reason = ban.reason || 'No especificada';
+  try {
+    const auditLogs = await ban.guild.fetchAuditLogs({ limit: 1, type: 22 }); // MEMBER_BAN_ADD
+    const entry = auditLogs.entries.first();
+    if (entry && entry.target.id === ban.user.id && Date.now() - entry.createdTimestamp < 5000) {
+      moderator = entry.executor;
+      reason = entry.reason || reason;
+    }
+  } catch {}
+
   const embed = new EmbedBuilder()
     .setTitle('🔨 Usuario Baneado')
-    .setColor(0x8B0000)
+    .setColor(0xED4245)
     .setThumbnail(ban.user.displayAvatarURL())
     .addFields(
-      { name: 'Usuario', value: `${ban.user.tag}`, inline: true },
-      { name: 'ID', value: ban.user.id, inline: true },
-      { name: 'Razón', value: ban.reason || 'No especificada', inline: false }
+      { name: '👤 Usuario', value: `${ban.user.tag} (<@${ban.user.id}>)`, inline: true },
+      { name: '🆔 ID', value: ban.user.id, inline: true },
+      { name: '🛡️ Moderador', value: moderator ? `${moderator.tag} (<@${moderator.id}>)` : 'Desconocido', inline: true },
+      { name: '📝 Razón', value: reason, inline: false },
+      { name: '📅 Cuenta creada', value: `<t:${Math.floor(ban.user.createdTimestamp / 1000)}:R>`, inline: true }
     )
     .setTimestamp();
-
   await sendTypedLog(ban.guild, 'bans', embed);
 });
 
 // Log: Usuario desbaneado
 client.on('guildBanRemove', async (ban) => {
+  await new Promise(r => setTimeout(r, 500));
+  let moderator = null;
+  try {
+    const auditLogs = await ban.guild.fetchAuditLogs({ limit: 1, type: 23 }); // MEMBER_BAN_REMOVE
+    const entry = auditLogs.entries.first();
+    if (entry && entry.target.id === ban.user.id && Date.now() - entry.createdTimestamp < 5000) {
+      moderator = entry.executor;
+    }
+  } catch {}
+
   const embed = new EmbedBuilder()
     .setTitle('🔓 Usuario Desbaneado')
-    .setColor(0x00FF00)
+    .setColor(0x57F287)
     .setThumbnail(ban.user.displayAvatarURL())
     .addFields(
-      { name: 'Usuario', value: `${ban.user.tag}`, inline: true },
-      { name: 'ID', value: ban.user.id, inline: true }
+      { name: '👤 Usuario', value: `${ban.user.tag} (<@${ban.user.id}>)`, inline: true },
+      { name: '🆔 ID', value: ban.user.id, inline: true },
+      { name: '🛡️ Moderador', value: moderator ? `${moderator.tag} (<@${moderator.id}>)` : 'Desconocido', inline: true }
     )
     .setTimestamp();
-
   await sendTypedLog(ban.guild, 'bans', embed);
 });
 
