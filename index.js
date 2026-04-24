@@ -5,8 +5,12 @@ const path = require('path');
 
 // ─── INICIAR DASHBOARD SERVER ─────────────────────────────────────────────────
 try {
-  require('./dashboard/server.cjs');
-  console.log('✅ Dashboard server started');
+  // Intentar ambas variantes por si el nombre de carpeta difiere
+  let dashboardLoaded = false;
+  for (const p of ['./DashBoard/server.cjs', './dashboard/server.cjs']) {
+    try { require(p); dashboardLoaded = true; console.log('✅ Dashboard server started'); break; } catch {}
+  }
+  if (!dashboardLoaded) throw new Error('server.cjs not found in DashBoard/ or dashboard/');
 } catch (err) {
   console.error('⚠️ Dashboard server failed to start:', err.message);
 }
