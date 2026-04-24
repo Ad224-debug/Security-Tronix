@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import LogCard from './LogCard';
 import { INITIAL_LOGS } from '../constants';
 import { LogConfig } from '../types';
@@ -28,12 +28,10 @@ export default function LogsView() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const isFirstLoad = useRef(true);
+  const loadedRef = useRef(false);
 
   const guildId = localStorage.getItem('selectedGuildId');
 
-  // Cargar config de logs y canales del servidor
   useEffect(() => {
     if (!guildId) return;
     Promise.all([
@@ -47,32 +45,9 @@ export default function LogsView() {
       })));
       setChannels(channelsData);
       setLoading(false);
+      loadedRef.current = true;
     }).catch(() => setLoading(false));
   }, [guildId]);
-
-  // Auto-save con debounce de 800ms cada vez que cambian los logs
-  useEffect(() => {
-    if (loading || isFirstLoad.current) {
-      isFirstLoad.current = false;
-      return;
-    }
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(async () => {
-      if (!guildId) return;
-      setSaving(true);
-      setSaveStatus('idle');
-      try {
-        const res = await saveLogs(guildId, logs);
-        setSaveStatus(res.ok ? 'success' : 'error');
-      } catch {
-        setSaveStatus('error');
-      } finally {
-        setSaving(false);
-        setTimeout(() => setSaveStatus('idle'), 2000);
-      }
-    }, 800);
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [logs]);
 
   const handleToggle = (id: string) => {
     setLogs(prev => prev.map(log =>
@@ -87,7 +62,7 @@ export default function LogsView() {
   };
 
   const handleSave = async () => {
-    if (!guildId) return;
+    if (!guildId || saving) return;
     setSaving(true);
     setSaveStatus('idle');
     try {
@@ -97,7 +72,7 @@ export default function LogsView() {
       setSaveStatus('error');
     } finally {
       setSaving(false);
-      setTimeout(() => setSaveStatus('idle'), 2000);
+      setTimeout(() => setSaveStatus('idle'), 3000);
     }
   };
 
@@ -106,7 +81,7 @@ export default function LogsView() {
     log.description.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const enabledCount = logs.filter(l => l.enabled).length;
+  const enabledCount = logs.filter(l => l.enabled && l.channelId).length;
 
   return (
     <div className="max-w-6xl mx-auto">
@@ -137,6 +112,7 @@ export default function LogsView() {
               className="pl-10 pr-4 py-2 bg-discord-sidebar border border-black/20 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-discord-blurple w-64 transition-all text-discord-header"
             />
           </div>
+
           {saving && (
             <div className="flex items-center space-x-2 text-discord-muted text-sm">
               <Loader size={14} className="animate-spin" />
@@ -146,23 +122,25 @@ export default function LogsView() {
           {saveStatus === 'success' && !saving && (
             <div className="flex items-center space-x-2 text-discord-green text-sm">
               <CheckCircle size={14} />
-              <span>Guardado</span>
+              <span>¡Guardado!</span>
             </div>
           )}
           {saveStatus === 'error' && !saving && (
             <div className="flex items-center space-x-2 text-discord-red text-sm">
               <AlertCircle size={14} />
-              <span>Error</span>
+              <span>Error al guardar</span>
             </div>
           )}
+
           <button
             onClick={handleSave}
             disabled={saving || loading}
             className="flex items-center space-x-2 bg-discord-blurple hover:bg-[#4752C4] disabled:opacity-50 text-white px-5 py-2 rounded-lg font-bold text-sm transition-all shadow-lg active:scale-95"
           >
-            <Save size={16} />
+            {saving ? <Loader size={16} className="animate-spin" /> : <Save size={16} />}
             <span>Guardar</span>
-          </button>        </motion.div>
+          </button>
+        </motion.div>
       </header>
 
       {loading ? (
@@ -172,7 +150,7 @@ export default function LogsView() {
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 pb-20">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 pb-8">
           <AnimatePresence mode="popLayout">
             {filteredLogs.map((log, index) => (
               <motion.div
@@ -199,19 +177,6 @@ export default function LogsView() {
           <Search size={32} className="text-discord-muted mb-2" />
           <h3 className="text-xl font-bold text-discord-header">No se encontraron logs</h3>
         </div>
-      )}
-
-      {!loading && filteredLogs.length > 0 && (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }} className="mt-12 flex justify-center">
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="flex items-center space-x-3 bg-discord-blurple hover:bg-[#4752C4] disabled:opacity-50 text-white px-10 py-4 rounded-xl font-black text-lg transition-all shadow-2xl active:scale-95"
-          >
-            {saving ? <Loader size={24} className="animate-spin" /> : <Save size={24} />}
-            <span>{saving ? 'Guardando...' : 'Guardar configuración de logs'}</span>
-          </button>
-        </motion.div>
       )}
     </div>
   );
