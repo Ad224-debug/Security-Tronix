@@ -17,7 +17,7 @@ export default function LogCard({ log, channels, onToggle, onChannelChange }: Lo
     <motion.div
       layout
       className={`bg-discord-card rounded-xl p-5 border transition-colors shadow-lg ${
-        log.enabled ? 'border-discord-blurple/40' : 'border-white/5 hover:border-white/10'
+        log.enabled && log.channelId ? 'border-discord-blurple/40' : 'border-white/5 hover:border-white/10'
       }`}
     >
       <div className="flex justify-between items-start mb-3">
@@ -46,12 +46,9 @@ export default function LogCard({ log, channels, onToggle, onChannelChange }: Lo
           <select
             value={log.channelId || ''}
             onChange={e => onChannelChange(log.id, e.target.value)}
-            disabled={!log.enabled}
-            className={`w-full pl-7 pr-8 py-1.5 rounded-lg text-sm bg-discord-sidebar border border-black/20 focus:outline-none focus:ring-1 focus:ring-discord-blurple appearance-none transition-opacity text-discord-header ${
-              !log.enabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:bg-[#1a1c1e]'
-            }`}
+            className="w-full pl-7 pr-8 py-1.5 rounded-lg text-sm bg-discord-sidebar border border-black/20 focus:outline-none focus:ring-1 focus:ring-discord-blurple appearance-none cursor-pointer hover:bg-[#1a1c1e] transition-opacity text-discord-header"
           >
-            <option value="" disabled>Seleccionar canal</option>
+            <option value="">Sin canal</option>
             {channels.map(ch => (
               <option key={ch.id} value={ch.id}>#{ch.name}</option>
             ))}

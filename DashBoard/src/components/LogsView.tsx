@@ -14,6 +14,7 @@ async function saveLogs(guildId: string, logs: LogConfig[]) {
       payload[log.id] = log.channelId;
     }
   }
+  console.log('[saveLogs] payload:', payload);
   return fetch(`/api/guild/${guildId}/logs`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
