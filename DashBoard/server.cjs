@@ -232,6 +232,7 @@ app.get('/api/guild/:guildId/logs', requireAuth, (req, res) => {
 
 app.post('/api/guild/:guildId/logs', requireAuth, (req, res) => {
   const { guildId } = req.params;
+  console.log(`[logs POST] guildId=${guildId} sessionGuilds=${JSON.stringify(req.session.guilds?.map(g=>g.id))} body=${JSON.stringify(req.body)}`);
   if (!canAccessGuild(req, guildId)) return res.status(403).json({ error: 'Forbidden' });
   guildConfig.set(guildId, 'modLogs', req.body);
   console.log(`[logs] Saved for guild ${guildId}:`, req.body);
