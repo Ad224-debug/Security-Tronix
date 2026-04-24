@@ -23,9 +23,6 @@ const fs = require('fs');
 console.log('[dashboard] DISCORD_TOKEN:', process.env.DISCORD_TOKEN ? '✅' : '❌ NO encontrado');
 console.log('[dashboard] APPLICATION_ID:', process.env.APPLICATION_ID ? '✅' : '❌ NO encontrado');
 console.log('[dashboard] DISCORD_CLIENT_SECRET:', process.env.DISCORD_CLIENT_SECRET ? '✅' : '❌ NO encontrado');
-// Debug: mostrar todas las variables que contienen "DISCORD" o "CLIENT"
-const relevantVars = Object.keys(process.env).filter(k => k.includes('DISCORD') || k.includes('CLIENT') || k.includes('SECRET'));
-console.log('[dashboard] Relevant env vars found:', relevantVars);
 
 const guildConfig = require('../guild-config');
 
