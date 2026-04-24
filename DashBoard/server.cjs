@@ -7,6 +7,13 @@
 // Solo cargamos .env.local si existe (para desarrollo local)
 try { require('dotenv').config({ path: require('path').join(__dirname, '.env.local') }); } catch {}
 
+// En Railway, node_modules está en la raíz del proyecto, no en DashBoard/
+// Agregamos la raíz al path de búsqueda de módulos
+const rootPath = require('path').join(__dirname, '..');
+if (!module.paths.includes(require('path').join(rootPath, 'node_modules'))) {
+  module.paths.push(require('path').join(rootPath, 'node_modules'));
+}
+
 const express = require('express');
 const session = require('express-session');
 const fetch = (...args) => import('node-fetch').then(({ default: f }) => f(...args));

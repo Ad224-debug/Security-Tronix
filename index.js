@@ -1,5 +1,5 @@
 require('dotenv').config();
-const { Client, GatewayIntentBits, Collection, PermissionFlagsBits, REST, Routes } = require('discord.js');
+const { Client, GatewayIntentBits, Collection, PermissionFlagsBits, REST, Routes, EmbedBuilder } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
 
@@ -8,7 +8,9 @@ try {
   // Intentar ambas variantes por si el nombre de carpeta difiere
   let dashboardLoaded = false;
   for (const p of ['./DashBoard/server.cjs', './dashboard/server.cjs']) {
-    try { require(p); dashboardLoaded = true; console.log('✅ Dashboard server started'); break; } catch {}
+    try { require(p); dashboardLoaded = true; console.log('✅ Dashboard server started'); break; } catch (e) {
+      console.error(`[dashboard] Failed to load ${p}:`, e.message);
+    }
   }
   if (!dashboardLoaded) throw new Error('server.cjs not found in DashBoard/ or dashboard/');
 } catch (err) {
@@ -330,7 +332,6 @@ function setupCronJobs() {
 }
 
 // ==================== SISTEMA DE LOGS AUTOMÁTICO ====================
-const { EmbedBuilder } = require('discord.js');
 
 // Sistema de Auto-Moderación
 const { checkAutomod } = require('./automod-system');
