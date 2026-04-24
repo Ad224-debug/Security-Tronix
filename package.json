@@ -6,8 +6,8 @@
   "scripts": {
     "start": "node index.js",
     "deploy": "node deploy-commands.js",
-    "build": "cd DashBoard && npm install && npm run build",
-    "postinstall": "cd DashBoard && npm install && npm run build"
+    "build": "npm install --prefix DashBoard && npm run build --prefix DashBoard",
+    "postinstall": "npm install --prefix DashBoard && npm run build --prefix DashBoard"
   },
   "dependencies": {
     "@discordjs/rest": "^2.6.0",
