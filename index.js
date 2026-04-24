@@ -3,6 +3,14 @@ const { Client, GatewayIntentBits, Collection, PermissionFlagsBits, REST, Routes
 const fs = require('fs');
 const path = require('path');
 
+// ─── INICIAR DASHBOARD SERVER ─────────────────────────────────────────────────
+try {
+  require('./dashboard/server.cjs');
+  console.log('✅ Dashboard server started');
+} catch (err) {
+  console.error('⚠️ Dashboard server failed to start:', err.message);
+}
+
 // ─── AUTO DEPLOY DE COMANDOS SLASH ───────────────────────────────────────────
 // Se ejecuta una vez al arrancar el bot (Railway, local, etc.)
 (async () => {

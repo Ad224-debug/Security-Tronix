@@ -1,10 +1,11 @@
 /**
- * server.js — Express backend para el dashboard de Security Tronix
- * Maneja: Discord OAuth2, sesiones, API REST para configuración del bot
+ * server.cjs — Dashboard Express server para Security Tronix
+ * Corre integrado con el bot — comparte el mismo proceso y SQLite en Railway
  */
 
-require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
-require('dotenv').config({ path: require('path').join(__dirname, '.env.local') });
+// En Railway las variables ya están en process.env
+// Solo cargamos .env.local si existe (para desarrollo local)
+try { require('dotenv').config({ path: require('path').join(__dirname, '.env.local') }); } catch {}
 
 const express = require('express');
 const session = require('express-session');
@@ -12,12 +13,10 @@ const fetch = (...args) => import('node-fetch').then(({ default: f }) => f(...ar
 const path = require('path');
 const fs = require('fs');
 
-// Verificar que el token está cargado
-console.log('[config] DISCORD_TOKEN:', process.env.DISCORD_TOKEN ? '✅ cargado' : '❌ NO encontrado');
-console.log('[config] APPLICATION_ID:', process.env.APPLICATION_ID ? '✅ cargado' : '❌ NO encontrado');
-console.log('[config] DISCORD_CLIENT_SECRET:', process.env.DISCORD_CLIENT_SECRET ? '✅ cargado' : '❌ NO encontrado');
+console.log('[dashboard] DISCORD_TOKEN:', process.env.DISCORD_TOKEN ? '✅' : '❌ NO encontrado');
+console.log('[dashboard] APPLICATION_ID:', process.env.APPLICATION_ID ? '✅' : '❌ NO encontrado');
+console.log('[dashboard] DISCORD_CLIENT_SECRET:', process.env.DISCORD_CLIENT_SECRET ? '✅' : '❌ NO encontrado');
 
-// Importar guild-config del bot (acceso directo a SQLite)
 const guildConfig = require('../guild-config');
 
 const app = express();
@@ -28,24 +27,34 @@ app.use(session({
   secret: process.env.SESSION_SECRET || 'security-tronix-secret-change-me',
   resave: false,
   saveUninitialized: false,
-  cookie: { secure: false, maxAge: 7 * 24 * 60 * 60 * 1000 } // 7 días
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 7 * 24 * 60 * 60 * 1000
+  }
 }));
 
 // ── Servir el frontend React (build) ─────────────────────────────────────────
 const distPath = path.join(__dirname, 'dist');
 if (fs.existsSync(distPath)) {
   app.use(express.static(distPath));
+  console.log('[dashboard] Serving static files from dist/');
+} else {
+  console.warn('[dashboard] No dist/ folder found — run npm run build in dashboard/');
 }
 
 // ── Discord OAuth2 ────────────────────────────────────────────────────────────
 const DISCORD_CLIENT_ID     = process.env.APPLICATION_ID;
 const DISCORD_CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET;
-const APP_URL               = process.env.DASHBOARD_URL || 'http://localhost:4000';
+const RAILWAY_DOMAIN        = process.env.RAILWAY_PUBLIC_DOMAIN;
+const APP_URL               = process.env.DASHBOARD_URL ||
+  (RAILWAY_DOMAIN ? `https://${RAILWAY_DOMAIN}` : 'http://localhost:4000');
 const REDIRECT_URI          = `${APP_URL}/auth/callback`;
+const DISCORD_API           = 'https://discord.com/api/v10';
 
-const DISCORD_API = 'https://discord.com/api/v10';
+console.log('[dashboard] APP_URL:', APP_URL);
+console.log('[dashboard] REDIRECT_URI:', REDIRECT_URI);
 
-// GET /auth/login — redirige a Discord OAuth2
+// GET /auth/login
 app.get('/auth/login', (req, res) => {
   const params = new URLSearchParams({
     client_id: DISCORD_CLIENT_ID,
@@ -56,13 +65,11 @@ app.get('/auth/login', (req, res) => {
   res.redirect(`https://discord.com/oauth2/authorize?${params}`);
 });
 
-// GET /auth/callback — Discord redirige acá con el code
+// GET /auth/callback
 app.get('/auth/callback', async (req, res) => {
   const { code } = req.query;
   if (!code) return res.redirect('/?error=no_code');
-
   try {
-    // Intercambiar code por access_token
     const tokenRes = await fetch(`${DISCORD_API}/oauth2/token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -75,21 +82,18 @@ app.get('/auth/callback', async (req, res) => {
       }),
     });
     const tokenData = await tokenRes.json();
-    if (!tokenData.access_token) return res.redirect('/?error=token_failed');
+    if (!tokenData.access_token) {
+      console.error('[OAuth2] Token error:', tokenData);
+      return res.redirect('/?error=token_failed');
+    }
 
-    // Obtener info del usuario
-    const userRes = await fetch(`${DISCORD_API}/users/@me`, {
-      headers: { Authorization: `Bearer ${tokenData.access_token}` },
-    });
-    const user = await userRes.json();
-
-    // Obtener servidores del usuario
-    const guildsRes = await fetch(`${DISCORD_API}/users/@me/guilds`, {
-      headers: { Authorization: `Bearer ${tokenData.access_token}` },
-    });
+    const [userRes, guildsRes] = await Promise.all([
+      fetch(`${DISCORD_API}/users/@me`, { headers: { Authorization: `Bearer ${tokenData.access_token}` } }),
+      fetch(`${DISCORD_API}/users/@me/guilds`, { headers: { Authorization: `Bearer ${tokenData.access_token}` } }),
+    ]);
+    const user   = await userRes.json();
     const guilds = await guildsRes.json();
 
-    // Guardar en sesión
     req.session.user = {
       id: user.id,
       username: user.username,
@@ -97,38 +101,35 @@ app.get('/auth/callback', async (req, res) => {
       avatar: user.avatar
         ? `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png`
         : `https://cdn.discordapp.com/embed/avatars/${parseInt(user.discriminator || 0) % 5}.png`,
-      accessToken: tokenData.access_token,
     };
 
-    // Obtener los servidores donde está el bot
+    // Obtener guilds donde está el bot
     let botGuildIds = new Set();
     try {
       const botGuildsRes = await fetch(`${DISCORD_API}/users/@me/guilds`, {
         headers: { Authorization: `Bot ${process.env.DISCORD_TOKEN}` },
       });
       const botGuilds = await botGuildsRes.json();
-      if (Array.isArray(botGuilds)) {
-        botGuilds.forEach(g => botGuildIds.add(g.id));
-      }
+      if (Array.isArray(botGuilds)) botGuilds.forEach(g => botGuildIds.add(g.id));
     } catch (e) {
       console.error('[OAuth2] Error fetching bot guilds:', e.message);
     }
 
-    // Filtrar: usuario es admin (bit 0x8) Y el bot está en ese servidor
-    req.session.guilds = guilds
+    // Solo guilds donde el usuario es admin Y el bot está presente
+    req.session.guilds = (Array.isArray(guilds) ? guilds : [])
       .filter(g => {
-        const isAdmin = (BigInt(g.permissions) & BigInt(0x8)) === BigInt(0x8);
-        const botPresent = botGuildIds.has(g.id);
-        return isAdmin && botPresent;
+        try {
+          const isAdmin = (BigInt(g.permissions) & BigInt(0x8)) === BigInt(0x8);
+          return isAdmin && botGuildIds.has(g.id);
+        } catch { return false; }
       })
       .map(g => ({
         id: g.id,
         name: g.name,
-        icon: g.icon
-          ? `https://cdn.discordapp.com/icons/${g.id}/${g.icon}.png`
-          : null,
+        icon: g.icon ? `https://cdn.discordapp.com/icons/${g.id}/${g.icon}.png` : null,
       }));
 
+    console.log(`[OAuth2] ${user.username} logged in — ${req.session.guilds.length} guilds with bot`);
     res.redirect('/select-server');
   } catch (err) {
     console.error('[OAuth2] Error:', err);
@@ -142,24 +143,26 @@ app.get('/auth/logout', (req, res) => {
   res.redirect('/');
 });
 
-// ── Middleware de autenticación ───────────────────────────────────────────────
+// ── Auth middleware ───────────────────────────────────────────────────────────
 function requireAuth(req, res, next) {
   if (!req.session.user) return res.status(401).json({ error: 'Not authenticated' });
   next();
 }
 
-// ── API: Usuario actual ───────────────────────────────────────────────────────
+function canAccessGuild(req, guildId) {
+  return req.session.guilds?.some(g => g.id === guildId);
+}
+
+// ── API: Me ───────────────────────────────────────────────────────────────────
 app.get('/api/me', requireAuth, (req, res) => {
   res.json({ user: req.session.user, guilds: req.session.guilds });
 });
 
-// ── API: Stats reales del servidor ────────────────────────────────────────────
+// ── API: Stats ────────────────────────────────────────────────────────────────
 app.get('/api/guild/:guildId/stats', requireAuth, async (req, res) => {
   const { guildId } = req.params;
   if (!canAccessGuild(req, guildId)) return res.status(403).json({ error: 'Forbidden' });
-
   try {
-    // Obtener info del guild via Bot token
     const [guildRes, bansRes] = await Promise.all([
       fetch(`${DISCORD_API}/guilds/${guildId}?with_counts=true`, {
         headers: { Authorization: `Bot ${process.env.DISCORD_TOKEN}` }
@@ -168,12 +171,9 @@ app.get('/api/guild/:guildId/stats', requireAuth, async (req, res) => {
         headers: { Authorization: `Bot ${process.env.DISCORD_TOKEN}` }
       })
     ]);
-
     const guild = await guildRes.json();
-    const bans = await bansRes.json();
-    console.log('[stats] guild:', guild?.name, '| bans:', Array.isArray(bans) ? bans.length : bans?.message);
+    const bans  = await bansRes.json();
 
-    // Contar warnings de hoy desde warnings.json
     const warningsPath = path.join(__dirname, '../warnings.json');
     let warningsToday = 0;
     if (fs.existsSync(warningsPath)) {
@@ -188,29 +188,16 @@ app.get('/api/guild/:guildId/stats', requireAuth, async (req, res) => {
       } catch {}
     }
 
-    // Contar acciones de automod de hoy desde mod-cases.json
     const casesPath = path.join(__dirname, '../data/mod-cases.json');
-    let automodToday = 0;
-    let recentCases = [];
+    let automodToday = 0, recentCases = [];
     if (fs.existsSync(casesPath)) {
       try {
         const cases = JSON.parse(fs.readFileSync(casesPath, 'utf8'));
         const guildCases = cases[guildId] || [];
         const todayStart = new Date(); todayStart.setHours(0,0,0,0);
-        automodToday = guildCases.filter(c =>
-          c.moderatorId === 'automod' && c.timestamp >= todayStart.getTime()
-        ).length;
-        recentCases = [...guildCases]
-          .sort((a, b) => b.timestamp - a.timestamp)
-          .slice(0, 10)
-          .map(c => ({
-            id: c.id,
-            type: c.type,
-            user: c.targetId,
-            moderator: c.moderatorId,
-            reason: c.reason || 'N/A',
-            timestamp: c.timestamp,
-          }));
+        automodToday = guildCases.filter(c => c.moderatorId === 'automod' && c.timestamp >= todayStart.getTime()).length;
+        recentCases = [...guildCases].sort((a, b) => b.timestamp - a.timestamp).slice(0, 10)
+          .map(c => ({ id: c.id, type: c.type, user: c.targetId, moderator: c.moderatorId, reason: c.reason || 'N/A', timestamp: c.timestamp }));
       } catch {}
     }
 
@@ -220,9 +207,7 @@ app.get('/api/guild/:guildId/stats', requireAuth, async (req, res) => {
       warningsToday,
       automodActionsToday: automodToday,
       guildName: guild.name,
-      guildIcon: guild.icon
-        ? `https://cdn.discordapp.com/icons/${guildId}/${guild.icon}.png`
-        : null,
+      guildIcon: guild.icon ? `https://cdn.discordapp.com/icons/${guildId}/${guild.icon}.png` : null,
       recentActivity: recentCases,
     });
   } catch (err) {
@@ -231,22 +216,22 @@ app.get('/api/guild/:guildId/stats', requireAuth, async (req, res) => {
   }
 });
 
-// ── API: Configuración de logs ────────────────────────────────────────────────
+// ── API: Logs ─────────────────────────────────────────────────────────────────
 app.get('/api/guild/:guildId/logs', requireAuth, (req, res) => {
   const { guildId } = req.params;
   if (!canAccessGuild(req, guildId)) return res.status(403).json({ error: 'Forbidden' });
-  const logs = guildConfig.get(guildId, 'modLogs') || {};
-  res.json(logs);
+  res.json(guildConfig.get(guildId, 'modLogs') || {});
 });
 
 app.post('/api/guild/:guildId/logs', requireAuth, (req, res) => {
   const { guildId } = req.params;
   if (!canAccessGuild(req, guildId)) return res.status(403).json({ error: 'Forbidden' });
   guildConfig.set(guildId, 'modLogs', req.body);
+  console.log(`[logs] Saved for guild ${guildId}:`, req.body);
   res.json({ success: true });
 });
 
-// ── API: Configuración de automod ─────────────────────────────────────────────
+// ── API: Automod ──────────────────────────────────────────────────────────────
 app.get('/api/guild/:guildId/automod', requireAuth, (req, res) => {
   const { guildId } = req.params;
   if (!canAccessGuild(req, guildId)) return res.status(403).json({ error: 'Forbidden' });
@@ -263,9 +248,7 @@ app.post('/api/guild/:guildId/automod', requireAuth, (req, res) => {
   if (!canAccessGuild(req, guildId)) return res.status(403).json({ error: 'Forbidden' });
   const automodPath = path.join(__dirname, '../data/automod.json');
   let all = {};
-  if (fs.existsSync(automodPath)) {
-    try { all = JSON.parse(fs.readFileSync(automodPath, 'utf8')); } catch {}
-  }
+  if (fs.existsSync(automodPath)) { try { all = JSON.parse(fs.readFileSync(automodPath, 'utf8')); } catch {} }
   all[guildId] = req.body;
   fs.writeFileSync(automodPath, JSON.stringify(all, null, 2));
   res.json({ success: true });
@@ -299,15 +282,13 @@ app.post('/api/guild/:guildId/verification', requireAuth, (req, res) => {
   res.json({ success: true });
 });
 
-// ── API: Moderación ───────────────────────────────────────────────────────────
+// ── API: Mod cases ────────────────────────────────────────────────────────────
 app.get('/api/guild/:guildId/modcases', requireAuth, (req, res) => {
   const { guildId } = req.params;
   if (!canAccessGuild(req, guildId)) return res.status(403).json({ error: 'Forbidden' });
   const casesPath = path.join(__dirname, '../data/mod-cases.json');
   let cases = {};
-  if (fs.existsSync(casesPath)) {
-    try { cases = JSON.parse(fs.readFileSync(casesPath, 'utf8')); } catch {}
-  }
+  if (fs.existsSync(casesPath)) { try { cases = JSON.parse(fs.readFileSync(casesPath, 'utf8')); } catch {} }
   res.json(cases[guildId] || []);
 });
 
@@ -345,7 +326,7 @@ app.post('/api/guild/:guildId/security', requireAuth, (req, res) => {
   res.json({ success: true });
 });
 
-// ── API: Canales del servidor (para los selectores) ───────────────────────────
+// ── API: Canales ──────────────────────────────────────────────────────────────
 app.get('/api/guild/:guildId/channels', requireAuth, async (req, res) => {
   const { guildId } = req.params;
   if (!canAccessGuild(req, guildId)) return res.status(403).json({ error: 'Forbidden' });
@@ -354,17 +335,16 @@ app.get('/api/guild/:guildId/channels', requireAuth, async (req, res) => {
       headers: { Authorization: `Bot ${process.env.DISCORD_TOKEN}` },
     });
     const channels = await r.json();
-    const textChannels = channels
-      .filter(c => c.type === 0)
-      .map(c => ({ id: c.id, name: c.name }))
-      .sort((a, b) => a.name.localeCompare(b.name));
-    res.json(textChannels);
-  } catch {
-    res.json([]);
-  }
+    res.json(
+      (Array.isArray(channels) ? channels : [])
+        .filter(c => c.type === 0)
+        .map(c => ({ id: c.id, name: c.name }))
+        .sort((a, b) => a.name.localeCompare(b.name))
+    );
+  } catch { res.json([]); }
 });
 
-// ── API: Roles del servidor ───────────────────────────────────────────────────
+// ── API: Roles ────────────────────────────────────────────────────────────────
 app.get('/api/guild/:guildId/roles', requireAuth, async (req, res) => {
   const { guildId } = req.params;
   if (!canAccessGuild(req, guildId)) return res.status(403).json({ error: 'Forbidden' });
@@ -373,29 +353,25 @@ app.get('/api/guild/:guildId/roles', requireAuth, async (req, res) => {
       headers: { Authorization: `Bot ${process.env.DISCORD_TOKEN}` },
     });
     const roles = await r.json();
-    res.json(roles.map(r => ({ id: r.id, name: r.name, color: r.color })));
-  } catch {
-    res.json([]);
-  }
+    res.json((Array.isArray(roles) ? roles : []).map(r => ({ id: r.id, name: r.name, color: r.color })));
+  } catch { res.json([]); }
 });
 
-// ── Helper: verificar que el usuario tiene acceso al guild ────────────────────
-function canAccessGuild(req, guildId) {
-  return req.session.guilds?.some(g => g.id === guildId);
-}
-
-// ── Fallback: servir React para rutas del frontend ────────────────────────────
+// ── Fallback SPA ──────────────────────────────────────────────────────────────
 app.get('*', (req, res) => {
-  if (req.path.startsWith('/api') || req.path.startsWith('/auth')) return res.status(404).json({ error: 'Not found' });
+  if (req.path.startsWith('/api') || req.path.startsWith('/auth')) {
+    return res.status(404).json({ error: 'Not found' });
+  }
   const indexPath = path.join(__dirname, 'dist', 'index.html');
   if (fs.existsSync(indexPath)) {
     res.sendFile(indexPath);
   } else {
-    res.send('Dashboard not built yet. Run: npm run build');
+    res.send('<h1>Dashboard not built</h1><p>Run: cd dashboard && npm run build</p>');
   }
 });
 
-const PORT = process.env.DASHBOARD_PORT || 4000;
+// ── Start server ──────────────────────────────────────────────────────────────
+const PORT = process.env.PORT || process.env.DASHBOARD_PORT || 4000;
 app.listen(PORT, () => {
-  console.log(`✅ Dashboard server running at http://localhost:${PORT}`);
+  console.log(`✅ Dashboard running at http://localhost:${PORT}`);
 });
