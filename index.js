@@ -1589,6 +1589,8 @@ client.on('interactionCreate', async (interaction) => {
     return;
   }
 
+  if (!interaction.guild) return; // Ignorar interacciones fuera de un servidor
+
   console.log(`[CMD] Ejecutando /${interaction.commandName} por ${interaction.user.tag} en ${interaction.guild.name}`);
 
   // Verificar permisos personalizados del comando
