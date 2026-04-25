@@ -338,7 +338,7 @@ const { checkAutomod } = require('./automod-system');
 // Sistemas de seguridad adicionales (anti-spam, phishing, alt-detector)
 const { runSecurityChecks, runAltCheck } = require('./security-systems');
 // Sistema anti-raid
-const { checkRaid } = require('./antiraid-system');
+const { checkRaid, checkDestructiveAction } = require('./antiraid-system');
 
 // Cachear mensajes para poder recuperarlos cuando se eliminen
 client.on('messageCreate', async (message) => {
@@ -871,6 +871,10 @@ client.on('guildBanAdd', async (ban) => {
     if (entry && entry.target.id === ban.user.id && Date.now() - entry.createdTimestamp < 5000) {
       moderator = entry.executor;
       reason = entry.reason || reason;
+      // Anti-raid: detectar bans masivos
+      if (moderator && moderator.id !== ban.guild.ownerId) {
+        await checkDestructiveAction(ban.guild, moderator.id, 'ban', sendLog);
+      }
     }
   } catch {}
 
@@ -1115,6 +1119,15 @@ client.on('channelCreate', async (channel) => {
 client.on('channelDelete', async (channel) => {
   if (!channel.guild) return;
 
+  // Anti-raid: detectar eliminación masiva de canales
+  try {
+    const logs = await channel.guild.fetchAuditLogs({ limit: 1, type: 12 }).catch(() => null); // CHANNEL_DELETE
+    const entry = logs?.entries.first();
+    if (entry && Date.now() - entry.createdTimestamp < 5000) {
+      await checkDestructiveAction(channel.guild, entry.executor.id, 'channelDelete', sendLog);
+    }
+  } catch {}
+
   const embed = new EmbedBuilder()
     .setTitle('🗑️ Canal Eliminado')
     .setColor(0xFF0000)
@@ -1145,6 +1158,15 @@ client.on('roleCreate', async (role) => {
 
 // Log: Rol eliminado
 client.on('roleDelete', async (role) => {
+  // Anti-raid: detectar eliminación masiva de roles
+  try {
+    const logs = await role.guild.fetchAuditLogs({ limit: 1, type: 32 }).catch(() => null); // ROLE_DELETE
+    const entry = logs?.entries.first();
+    if (entry && Date.now() - entry.createdTimestamp < 5000) {
+      await checkDestructiveAction(role.guild, entry.executor.id, 'roleDelete', sendLog);
+    }
+  } catch {}
+
   const embed = new EmbedBuilder()
     .setTitle('🗑️ Rol Eliminado')
     .setColor(0xFF0000)
