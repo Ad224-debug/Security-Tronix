@@ -170,13 +170,12 @@ async function sendLog(guild, embed, isDeleteLog = false) {
 async function sendTypedLog(guild, type, embed) {
   const modLogs = guildConfig.get(guild.id, 'modLogs') || {};
   const channelId = modLogs[type] || getLogChannel(guild.id);
-  console.log(`[sendTypedLog] type=${type} guildId=${guild.id} channelId=${channelId} modLogs=${JSON.stringify(modLogs)}`);
   if (!channelId) return;
   try {
     const ch = await guild.channels.fetch(channelId);
     if (ch) await ch.send({ embeds: [embed] });
   } catch (err) {
-    console.error(`Error enviando typed log [${type}]:`, err);
+    console.error(`[sendTypedLog] Error type=${type} guildId=${guild.id} channelId=${channelId}:`, err.message);
   }
 }
 
