@@ -797,16 +797,18 @@ client.on('guildMemberAdd', async (member) => {
 // Log: Miembro se va + guardar roles para Role Restore + detectar kicks
 client.on('guildMemberRemove', async (member) => {
   // Esperar un poco para que el audit log se actualice
-  await new Promise(r => setTimeout(r, 1000));
+  await new Promise(r => setTimeout(r, 2000));
 
   // Detectar si fue un kick via audit log
   let wasKicked = false;
   let kickModerator = null;
   let kickReason = 'No especificada';
   try {
-    const auditLogs = await member.guild.fetchAuditLogs({ limit: 1, type: 20 }); // MEMBER_KICK
-    const entry = auditLogs.entries.first();
-    if (entry && entry.target.id === member.id && Date.now() - entry.createdTimestamp < 5000) {
+    const auditLogs = await member.guild.fetchAuditLogs({ limit: 5, type: 20 }); // MEMBER_KICK
+    const entry = auditLogs.entries.find(e => 
+      e.target.id === member.id && Date.now() - e.createdTimestamp < 15000
+    );
+    if (entry) {
       wasKicked = true;
       kickModerator = entry.executor;
       kickReason = entry.reason || 'No especificada';
@@ -863,12 +865,14 @@ client.on('guildMemberRemove', async (member) => {
 
 // Log: Usuario baneado
 client.on('guildBanAdd', async (ban) => {
-  await new Promise(r => setTimeout(r, 1000));
+  await new Promise(r => setTimeout(r, 2000));
   let moderator = null, reason = ban.reason || 'No especificada';
   try {
-    const auditLogs = await ban.guild.fetchAuditLogs({ limit: 1, type: 22 }); // MEMBER_BAN_ADD
-    const entry = auditLogs.entries.first();
-    if (entry && entry.target.id === ban.user.id && Date.now() - entry.createdTimestamp < 5000) {
+    const auditLogs = await ban.guild.fetchAuditLogs({ limit: 5, type: 22 }); // MEMBER_BAN_ADD
+    const entry = auditLogs.entries.find(e =>
+      e.target.id === ban.user.id && Date.now() - e.createdTimestamp < 15000
+    );
+    if (entry) {
       moderator = entry.executor;
       reason = entry.reason || reason;
       // Anti-raid: detectar bans masivos
@@ -895,14 +899,14 @@ client.on('guildBanAdd', async (ban) => {
 
 // Log: Usuario desbaneado
 client.on('guildBanRemove', async (ban) => {
-  await new Promise(r => setTimeout(r, 500));
+  await new Promise(r => setTimeout(r, 2000));
   let moderator = null;
   try {
-    const auditLogs = await ban.guild.fetchAuditLogs({ limit: 1, type: 23 }); // MEMBER_BAN_REMOVE
-    const entry = auditLogs.entries.first();
-    if (entry && entry.target.id === ban.user.id && Date.now() - entry.createdTimestamp < 5000) {
-      moderator = entry.executor;
-    }
+    const auditLogs = await ban.guild.fetchAuditLogs({ limit: 5, type: 23 }); // MEMBER_BAN_REMOVE
+    const entry = auditLogs.entries.find(e =>
+      e.target.id === ban.user.id && Date.now() - e.createdTimestamp < 15000
+    );
+    if (entry) moderator = entry.executor;
   } catch {}
 
   const embed = new EmbedBuilder()
