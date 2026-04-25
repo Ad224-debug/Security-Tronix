@@ -20,7 +20,7 @@ const actionWindows = new Map(); // `${guildId}-${userId}-${type}` → [timestam
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 function getAntiRaidConfig(guildId) {
-  const fromDb = guildConfig.get(guildId, 'antiraidConfig');
+  const fromDb = guildConfig.get(guildId, 'antiRaidConfig');
   const defaults = {
     enabled:            false,
     threshold:          10,       // joins para activar raid
